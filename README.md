@@ -1,57 +1,66 @@
 # Simai Framework UI Builder
 
-Воспроизводимая build-system для Core, Component, Utility и Smart-контуров
-Simai Framework. Репозиторий перенесён из legacy `sf5.webpack`; source of truth
-компонентов остаётся в `ui-loader`, а `ui` и `ui-smart` остаются generated
-distribution и не редактируются вручную.
+`ui-builder` is the reproducible Webpack build system for the Core, Component,
+Utility, and Smart layers of [Simai Framework](https://github.com/simai).
 
-## Runtime
+The repository owns build planning, Webpack configuration, deterministic module
+and chunk identifiers, asset packaging, and reproducibility verification. The
+framework source remains in `simai/ui-loader`; `simai/ui` and `simai/ui-smart`
+are generated distributions and must not be edited as source code.
 
-- Node.js `20.19.5` для acceptance и CI; поддерживаемый минимум — `20.19.0`.
-- Yarn Classic `1.22.22`.
-- Webpack `5.108.4`.
-- committed `yarn.lock` привязан к независимо принятому builder baseline
-  `sf5.webpack@d4d151cce5f0955b1d838e8127ba7555df98d05c`.
+## Requirements
+
+- Node.js `20.19.5` for acceptance and CI; minimum supported version `20.19.0`
+- Yarn Classic `1.22.22`
+- Webpack `5.108.4`
+
+The committed `yarn.lock` is part of the accepted output contract. Do not
+refresh it as routine maintenance: output-producing dependency changes require
+the reproducibility process described in the
+[dependency policy](docs/developer/dependency-policy.md).
+
+## Quick start
 
 ```bash
+git clone git@github.com:simai/ui-builder.git
+cd ui-builder
 corepack enable
 yarn install --frozen-lockfile --ignore-scripts --non-interactive
 yarn run verify
 ```
 
-`yarn run` перед `verify` и `check` обязателен: в Yarn 1 слово `check` также
-является встроенной командой.
+Use `yarn run verify`, not `yarn verify`. Yarn Classic also defines `check` as a
+built-in command, so the explicit `run` form prevents command ambiguity.
 
-## Проверки
+A successful `verify` run checks the repository contract, RTL-safe PostCSS
+policy, deterministic identifiers, packaging, gzip output, and isolated fixture
+builds. It does not publish or modify a generated distribution.
 
-```bash
-yarn run check:repository
-yarn run check:rtl-postcss
-yarn run test:reproducibility
-yarn run verify
-```
+## Build commands
 
-`verify` проверяет repository/runtime contract, сохранность logical CSS после
-direction-aware fallback, deterministic IDs, packaging, gzip и две реальные
-fixture-сборки всех четырёх продуктовых контуров.
+The legacy Webpack configurations read source and output paths from a local
+`.env` file. Copy [`.env.example`](.env.example), provide absolute paths for the
+targets you use, and keep `.env` untracked.
 
-Полная двухволновая проверка на конкретном `ui-loader` запускается только в
-новой временной директории:
+| Command | Result |
+| --- | --- |
+| `yarn build:core` | Build normal and minified Core output |
+| `yarn build:component` | Build normal and minified Component output |
+| `yarn build:utility` | Build normal and minified Utility output |
+| `yarn build:all` | Build Core, Component, and Utility once |
+| `yarn watch` | Watch Core, Component, and Utility inputs |
 
-```bash
-node scripts/verify-product-reproducibility.cjs \
-  /absolute/path/to/ui-loader \
-  /absolute/path/to/new-workspace
-```
+The historical aliases `full`, `core`, `utility`, `comp`, `plugin`, `dev`,
+`outline`, `divider`, and `editorjs` remain available for existing automation.
+`plugin` emits a deprecation warning and builds Component. The unavailable
+historical `modal` source target fails with an explicit error instead of running
+an incorrect build.
 
-Она создаёт по два независимых frozen runtime для builder/source, собирает
-Core, Component, Utility и Smart и требует byte-identical manifests. Результат
-пишется в `<workspace>/report.json`; checkout `ui`, `ui-smart` не нужен.
+## Product builds
 
-## Product runners
-
-Runners принимают только абсолютные пути и требуют новый, ещё не существующий
-output root:
+Use the product runners for deterministic builds in automation. They require
+absolute paths, a new output directory, and independently prepared dependency
+runtimes:
 
 ```bash
 SF_BUILDER_DEPENDENCY_ROOT=/absolute/path/to/builder-runtime \
@@ -64,51 +73,45 @@ node scripts/run-component-utility-product-build.cjs \
   /absolute/path/to/diagnostics.json
 ```
 
-Для Core и Smart используются соответственно
-`run-core-product-build.cjs` и `run-smart-product-build.cjs`. Frozen runtime
-готовит `prepare-frozen-dependency-runtime.cjs`.
+Core and Smart use `run-core-product-build.cjs` and
+`run-smart-product-build.cjs`. See the
+[product runner reference](docs/developer/product-runners.md) for the complete
+contract.
 
-Legacy compatibility materialization включается только полным набором:
+## Full reproducibility check
 
-- `SF_LEGACY_COMPATIBILITY_ROOT`;
-- `SF_LEGACY_COMPATIBILITY_MANIFEST`;
-- `SF_LEGACY_COMPATIBILITY_REVISION`.
+The verifier prepares two isolated frozen runtime pairs and builds all four
+products twice:
 
-Неполный или не совпадающий набор завершается fail-closed.
+```bash
+node scripts/verify-product-reproducibility.cjs \
+  /absolute/path/to/ui-loader \
+  /absolute/path/to/new-workspace
+```
 
-## Команды разработки
-
-| Команда | Назначение |
-| --- | --- |
-| `yarn build:core` | Core, normal + minified |
-| `yarn build:component` | Component, normal + minified |
-| `yarn build:utility` | Utility, normal + minified |
-| `yarn build:all` | Core + Component + Utility, one-shot |
-| `yarn watch` | те же три контура в watch-mode |
-
-Legacy aliases `full`, `core`, `utility`, `comp`, `plugin`, `dev`, `outline`,
-`divider` и `editorjs` сохранены. `plugin` направляется в Component с
-предупреждением. Источник отсутствующего legacy-target `modal` не входил в
-принятый builder, поэтому команда сохранена как явный fail-closed, а не как
-скрытая неправильная сборка.
-
-Для legacy webpack-configs заполните безопасную локальную `.env` по
-[`.env.example`](.env.example). Product runners `.env` не требуют.
+It succeeds only when the Core, Component, Utility, and Smart manifests are
+byte-identical between both waves. Evidence is written to
+`<workspace>/report.json`. Existing `ui` and `ui-smart` checkouts are not
+required and are not modified.
 
 ## GitHub Actions
 
-- `CI` выполняет frozen install и `yarn run verify` для push/PR.
-- `Product reproducibility` вручную принимает exact `ui-loader` ref и сохраняет
-  две build-волны как artifact. Для private `simai/ui-loader` нужен repository
-  secret `UI_LOADER_READ_TOKEN` с read-only Contents access.
+- **CI** performs a frozen install and runs `yarn run verify` on pushes and pull
+  requests.
+- **Product reproducibility** is a manually dispatched workflow that accepts an
+  exact `ui-loader` branch, tag, or commit and stores both build waves as an
+  artifact. A private `simai/ui-loader` checkout requires the
+  `UI_LOADER_READ_TOKEN` repository secret with read-only Contents access.
 
-## Документация
+## Documentation
 
-- [Карта документации](docs/README.md)
-- [Архитектура и границы](docs/developer/architecture.md)
-- [Миграция из sf5.webpack](docs/developer/migration-from-sf5-webpack.md)
-- [Политика зависимостей](docs/developer/dependency-policy.md)
+- [Documentation map](docs/README.md)
+- [Getting started](docs/developer/getting-started.md)
+- [Architecture and ownership](docs/developer/architecture.md)
+- [Product runner reference](docs/developer/product-runners.md)
+- [Dependency policy](docs/developer/dependency-policy.md)
+- [Migration from the legacy builder](docs/developer/migration-from-sf5-webpack.md)
+- [Contributing](CONTRIBUTING.md)
 
-Миграция builder не означает завершение RTL acceptance. Общая готовность LTR/RTL
-заявляется только после независимой component matrix, а не по одному зелёному
-build pipeline.
+Builder verification alone is not a claim of complete LTR/RTL readiness. That
+claim requires independent acceptance of the framework component matrix.

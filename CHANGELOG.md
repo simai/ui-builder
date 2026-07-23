@@ -1,29 +1,35 @@
 # Changelog
 
-Все значимые изменения ui-builder фиксируются в этом файле.
+All notable changes to `ui-builder` are documented in this file.
 
 ## Unreleased
 
 ### Added
 
-- GitHub repository baseline, Node/Yarn runtime contract and GitHub Actions.
-- Repository, RTL/PostCSS and two-wave product reproducibility checks.
-- Developer documentation for ownership, migration and dependency policy.
+- GitHub repository baseline, Node.js and Yarn runtime contract, and GitHub
+  Actions workflows.
+- Repository, RTL/PostCSS, and two-wave product reproducibility checks.
+- Developer documentation for setup, architecture, product runners, migration
+  provenance, and dependency policy.
 - Explicit modern `build:*` commands while preserving legacy aliases.
+- An English-first contribution and documentation policy for international
+  maintainers.
 
 ### Changed
 
 - Migrated the independently accepted `sf5.webpack@d4d151c` builder to
   `simai/ui-builder` without rewriting the target repository history.
-- Repaired `full.build.js` to use the existing Core, Component and Utility
-  configurations instead of missing legacy config modules.
-- Removed direct dependencies that duplicated Node built-ins or were unused by
-  the builder source; accepted output-producing versions remain frozen by the
-  original lockfile.
+- Repaired `full.build.js` to use the existing Core, Component, and Utility
+  configurations instead of missing legacy configuration modules.
+- Removed direct dependencies that duplicated Node.js built-ins or were unused
+  by the builder source; accepted output-producing versions remain frozen by
+  the original lockfile.
+- Reworked all public repository documentation in English and added clear
+  onboarding paths for maintainers and build integrators.
 
 ### Fixed
 
 - Stable module collision errors now include the colliding canonical module
   identifier.
 - Legacy `plugin` and missing `modal` commands now have explicit compatibility
-  behavior instead of failing through missing config files.
+  behavior instead of failing through missing configuration files.

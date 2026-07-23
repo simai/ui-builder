@@ -1,37 +1,48 @@
-# Runtime и dependency policy
+# Runtime and dependency policy
 
-## Принятый runtime
+## Accepted runtime
 
-Node `20.19.5`, Yarn `1.22.22`, Webpack `5.108.4` и committed `yarn.lock`
-образуют accepted compatibility runtime. Install всегда выполняется с
-`--frozen-lockfile --ignore-scripts`.
+Node.js `20.19.5`, Yarn Classic `1.22.22`, Webpack `5.108.4`, and the committed
+`yarn.lock` form the accepted compatibility runtime. Install dependencies with:
 
-Webpack уже находится на актуальной 5-й линии. Остальные output-producing
-dependencies нельзя поднимать только по номеру версии: они являются частью
-формата generated distribution.
+```bash
+yarn install --frozen-lockfile --ignore-scripts --non-interactive
+```
 
-## Почему lockfile намеренно сохранён
+Webpack is maintained on its current major line. Other output-producing
+dependencies cannot be upgraded based on version numbers alone because they
+participate in the generated distribution format.
 
-Пробное обновление Sass/PostCSS/Babel/loaders до текущих major-линий обнаружило
-два несовместимых изменения:
+## Why the lockfile is intentionally pinned
 
-1. новый `postcss-preset-env` физически преобразовал logical declarations,
-   нарушив обязательное retention/fallback-order правило;
-2. новый loader graph создавал повторяющиеся Webpack runtime identifiers и
-   ломал deterministic product build до материализации output.
+A trial upgrade of the Sass, PostCSS, Babel, and loader stack exposed two
+incompatible changes:
 
-Поэтому repository/CI/Node contract обновлён, а accepted output toolchain
-оставлен frozen. Это compatibility pin, а не забытое обновление.
+1. A newer `postcss-preset-env` configuration physically transformed logical
+   declarations and violated the required logical-retention and fallback-order
+   contract.
+2. A newer loader graph produced duplicate Webpack runtime identifiers and
+   stopped deterministic product builds before output materialization.
 
-## Правило обновления
+The repository structure, CI, Node.js contract, and Webpack version were
+modernized, while the accepted output-producing dependency graph remained
+frozen. This is a deliberate compatibility pin, not an unattended update.
 
-Dependency update принимается только отдельным кандидатом:
+The repository contract binds the lockfile to SHA-256
+`fa54d7fe2f590e8dadaac0bd0e5485184e11317393f41c75c8ebb7c3d04e755c`.
 
-1. обновить lockfile в отдельной ветке;
-2. пройти `yarn run verify`;
-3. выполнить две frozen product-волны на exact `ui-loader`;
-4. классифицировать каждый generated-output diff;
-5. передать exact SHA/tree независимому тестировщику;
-6. только после PASS готовить generated distribution rebind.
+## Dependency update gate
 
-Нельзя одновременно обновлять toolchain и молча публиковать `ui`/`ui-smart`.
+Every dependency update is a separate candidate and must:
+
+1. update the dependency specification and lockfile on an isolated branch;
+2. pass `yarn run verify` on the required Node.js version;
+3. run two frozen Core, Component, Utility, and Smart build waves against an
+   exact `ui-loader` revision;
+4. classify every generated-output difference;
+5. demonstrate the expected logical CSS retention and fallback order;
+6. receive independent acceptance for the exact commit and Git tree;
+7. update generated distributions only in a separately authorized step.
+
+Never combine a toolchain upgrade with an unreviewed publication to `ui` or
+`ui-smart`.

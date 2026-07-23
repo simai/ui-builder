@@ -1,7 +1,7 @@
 {
   "name": "@simai/ui-builder",
   "version": "1.0.0",
-  "description": "Reproducible Webpack build system for Simai Framework",
+  "description": "Deterministic Webpack build system for Simai Framework Core, Component, Utility, and Smart layers",
   "private": true,
   "license": "UNLICENSED",
   "repository": {
@@ -14,8 +14,9 @@
   "packageManager": "yarn@1.22.22",
   "publicPath": "./",
   "scripts": {
-    "check": "yarn check:rtl-postcss && yarn test:reproducibility",
-    "verify": "yarn check:repository && yarn check:rtl-postcss && yarn test:reproducibility",
+    "check": "yarn check:english && yarn check:rtl-postcss && yarn test:reproducibility",
+    "verify": "yarn check:repository && yarn check:english && yarn check:rtl-postcss && yarn test:reproducibility",
+    "check:english": "node scripts/verify-english-surface.cjs",
     "check:repository": "node scripts/verify-repository-contract.cjs",
     "check:rtl-postcss": "node scripts/reproducibility/verify-rtl-postcss-policy.js --json",
     "test:reproducibility": "node --test tests/reproducibility/*.test.js",
@@ -40,7 +41,9 @@
     "simai-framework",
     "webpack",
     "rtl",
-    "design-system"
+    "design-system",
+    "logical-properties",
+    "reproducible-builds"
   ],
   "devDependencies": {
     "@babel/core": "^7.15.5",

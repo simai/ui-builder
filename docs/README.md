@@ -1,11 +1,29 @@
-# Документация ui-builder
+# UI Builder documentation
 
-`ui-builder` — один технический модуль, поэтому developer documentation живёт
-в `docs/developer/`.
+This documentation is for developers who build, integrate, or maintain Simai
+Framework. `ui-builder` has no end-user runtime interface; it is build tooling
+for the framework repositories.
 
-- [Архитектура и ownership](developer/architecture.md)
-- [Миграция из legacy sf5.webpack](developer/migration-from-sf5-webpack.md)
-- [Runtime и dependency policy](developer/dependency-policy.md)
+## Choose a path
 
-Пользовательского runtime-интерфейса у репозитория нет: это build tooling для
-maintainers Simai Framework.
+### Set up and verify the builder
+
+1. [Getting started](developer/getting-started.md)
+2. [Product runner reference](developer/product-runners.md)
+3. [Dependency policy](developer/dependency-policy.md)
+
+### Understand or maintain the pipeline
+
+1. [Architecture and ownership](developer/architecture.md)
+2. [Product runner reference](developer/product-runners.md)
+3. [Dependency policy](developer/dependency-policy.md)
+
+### Review the migration provenance
+
+- [Migration from the legacy `sf5.webpack` repository](developer/migration-from-sf5-webpack.md)
+
+## Documentation contract
+
+All tracked documentation, code comments, CLI messages, issue and pull request
+text, and commit subjects must be written in English. Technical identifiers and
+historical repository names are preserved where accuracy requires them.

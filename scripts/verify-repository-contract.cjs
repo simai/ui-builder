@@ -36,6 +36,11 @@ check(packageJson.packageManager === "yarn@1.22.22", "unexpected Yarn runtime");
 check(packageJson.engines.node === ">=20.19.0", "unexpected Node contract");
 check(packageJson.devDependencies.webpack === "5.108.4", "unexpected Webpack");
 check(lockSha256 === ACCEPTED_LOCK_SHA256, "accepted frozen lockfile drifted");
+check(
+    packageJson.scripts["check:english"]
+        === "node scripts/verify-english-surface.cjs",
+    "English surface check is missing",
+);
 
 for (const script of [
     "full",
