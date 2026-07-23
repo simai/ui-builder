@@ -301,7 +301,7 @@ test("Smart lifecycle uses the frozen target and copies accepted templates", asy
                 {
                     entry: "smart/modal",
                     filename: "js/modal.js",
-                    mode: "development",
+                    mode: "production",
                 },
                 {
                     entry: "smart/modal",

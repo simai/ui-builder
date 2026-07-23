@@ -939,7 +939,7 @@ test("all five semantic entries produce deterministic raw and minified pairs", (
                 mode: configuration.mode,
             })),
             first.plan.entries.flatMap(entry => [
-                { key: entry.key, mode: "development" },
+                { key: entry.key, mode: "production" },
                 { key: entry.key, mode: "production" },
             ]),
         );
@@ -1005,6 +1005,8 @@ test("minification is unambiguous and cannot be overwritten by a duplicate key",
             const raw = definition.configurations[index];
             const minified = definition.configurations[index + 1];
 
+            assert.equal(raw.mode, "production");
+            assert.equal(minified.mode, "production");
             assert.deepEqual(raw.optimization, {
                 chunkIds: "deterministic",
                 minimize: false,

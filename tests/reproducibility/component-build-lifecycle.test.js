@@ -648,7 +648,7 @@ test("the frozen Component target produces the accepted 72/144 definition", asyn
 
             assert.deepEqual(Object.keys(raw.entry), [entry.key]);
             assert.deepEqual(Object.keys(minified.entry), [entry.key]);
-            assert.equal(raw.mode, "development");
+            assert.equal(raw.mode, "production");
             assert.equal(minified.mode, "production");
 
             for (const configuration of [raw, minified])

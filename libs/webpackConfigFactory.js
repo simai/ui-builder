@@ -608,7 +608,10 @@ function createConfiguration(
         entry: {
             [entry.key]: entry.input,
         },
-        mode: minified ? "production" : "development",
+        // Both distributable variants must resolve dependency conditionals as
+        // production code. The raw variant remains readable because its
+        // optimization block explicitly disables minification below.
+        mode: "production",
         module: {
             rules: [
                 {

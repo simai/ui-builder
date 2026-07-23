@@ -318,7 +318,7 @@ for (const fixture of [
                     {
                         entry: fixture.expectedEntry,
                         filename: `js/${fixture.expectedFilename}.js`,
-                        mode: "development",
+                        mode: "production",
                         resolveExtensions: fixture.expectedExtensions,
                         sassIncludePaths: fixture.product === "utility"
                             ? ["scss", "core"]
