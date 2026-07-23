@@ -764,7 +764,14 @@ test("policy values materialize exactly while deferred and dropped keys stay abs
             assert.equal(configuration.devtool, false);
             assert.equal(configuration.target, "web");
             assert.deepEqual(configuration.resolve, {
-                conditionNames: ["webpack", "browser", "production"],
+                conditionNames: [
+                    "webpack",
+                    "browser",
+                    "production",
+                    "import",
+                    "require",
+                    "default",
+                ],
                 extensions: [".js", ".scss"],
             });
             assert.equal(configuration.output.pathinfo, false);

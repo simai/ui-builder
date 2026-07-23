@@ -649,7 +649,14 @@ function createConfiguration(
         },
         plugins,
         resolve: {
-            conditionNames: ["webpack", "browser", "production"],
+            conditionNames: [
+                "webpack",
+                "browser",
+                "production",
+                "import",
+                "require",
+                "default",
+            ],
             extensions: configurationPolicy.resolveExtensions,
         },
         target: configurationPolicy.target,

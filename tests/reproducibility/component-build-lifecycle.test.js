@@ -661,7 +661,14 @@ test("the frozen Component target produces the accepted 72/144 definition", asyn
                 assert.equal(configuration.devtool, false);
                 assert.equal(configuration.target, "web");
                 assert.deepEqual(configuration.resolve, {
-                    conditionNames: ["webpack", "browser", "production"],
+                    conditionNames: [
+                        "webpack",
+                        "browser",
+                        "production",
+                        "import",
+                        "require",
+                        "default",
+                    ],
                     extensions: [".js", ".scss"],
                 });
                 assert.equal(configuration.output.pathinfo, false);
