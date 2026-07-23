@@ -1,0 +1,50 @@
+name: Product reproducibility
+
+on:
+  workflow_dispatch:
+    inputs:
+      ui_loader_ref:
+        description: Exact ui-loader branch, tag or SHA
+        required: true
+        default: main
+
+permissions:
+  contents: read
+
+jobs:
+  build-pairs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout ui-builder
+        uses: actions/checkout@v7
+        with:
+          path: ui-builder
+
+      - name: Checkout ui-loader
+        uses: actions/checkout@v7
+        with:
+          repository: simai/ui-loader
+          ref: ${{ inputs.ui_loader_ref }}
+          token: ${{ secrets.UI_LOADER_READ_TOKEN }}
+          path: ui-loader
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20.19.5
+
+      - name: Build two frozen product waves
+        run: >-
+          node ui-builder/scripts/verify-product-reproducibility.cjs
+          "$GITHUB_WORKSPACE/ui-loader"
+          "$RUNNER_TEMP/ui-builder-product-reproducibility"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-reproducibility-${{ github.sha }}
+          path: ${{ runner.temp }}/ui-builder-product-reproducibility
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,67 @@
+{
+  "name": "@simai/ui-builder",
+  "version": "1.0.0",
+  "description": "Reproducible Webpack build system for Simai Framework",
+  "private": true,
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/simai/ui-builder.git"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "packageManager": "yarn@1.22.22",
+  "publicPath": "./",
+  "scripts": {
+    "check": "yarn check:rtl-postcss && yarn test:reproducibility",
+    "verify": "yarn check:repository && yarn check:rtl-postcss && yarn test:reproducibility",
+    "check:repository": "node scripts/verify-repository-contract.cjs",
+    "check:rtl-postcss": "node scripts/reproducibility/verify-rtl-postcss-policy.js --json",
+    "test:reproducibility": "node --test tests/reproducibility/*.test.js",
+    "build": "yarn build:all",
+    "build:all": "webpack --config core.build.js --config component.build.js --config utility.build.js",
+    "build:core": "webpack --config core.build.js",
+    "build:component": "webpack --config component.build.js",
+    "build:utility": "webpack --config utility.build.js",
+    "watch": "webpack --watch --config core.build.js --config component.build.js --config utility.build.js",
+    "full": "yarn watch",
+    "core": "yarn build:core",
+    "utility": "yarn build:utility",
+    "comp": "yarn build:component",
+    "plugin": "node scripts/legacy-command.cjs plugin",
+    "dev": "yarn watch",
+    "modal": "node scripts/legacy-command.cjs modal",
+    "outline": "webpack --watch --config config/outline/webpack.js --config config/outline/webpack.min.js",
+    "divider": "webpack --watch --config config/divider/webpack.js --config config/divider/webpack.min.js",
+    "editorjs": "webpack --watch --config editorjs.build.js"
+  },
+  "keywords": [
+    "simai-framework",
+    "webpack",
+    "rtl",
+    "design-system"
+  ],
+  "devDependencies": {
+    "@babel/core": "^7.15.5",
+    "@babel/plugin-proposal-class-properties": "^7.14.5",
+    "@babel/preset-env": "^7.15.6",
+    "babel-loader": "^8.2.2",
+    "clean-webpack-plugin": "^4.0.0",
+    "compression-webpack-plugin": "^9.0.0",
+    "css-loader": "^6.2.0",
+    "dotenv": "^10.0.0",
+    "mini-css-extract-plugin": "^2.3.0",
+    "postcss": "^8.4.13",
+    "postcss-loader": "^6.2.1",
+    "postcss-preset-env": "^7.5.0",
+    "sass": "1.89.2",
+    "sass-loader": "^12.1.0",
+    "sass-resources-loader": "^2.2.4",
+    "terser-webpack-plugin": "5.6.1",
+    "uglify-js": "3",
+    "webpack": "5.108.4",
+    "webpack-cli": "^4.8.0",
+    "webpack-remove-empty-scripts": "^0.8.4"
+  }
+}
