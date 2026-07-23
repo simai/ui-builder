@@ -608,10 +608,7 @@ function createConfiguration(
         entry: {
             [entry.key]: entry.input,
         },
-        // Both distributable variants must resolve dependency conditionals as
-        // production code. The raw variant remains readable because its
-        // optimization block explicitly disables minification below.
-        mode: "production",
+        mode: minified ? "production" : "development",
         module: {
             rules: [
                 {
@@ -634,11 +631,13 @@ function createConfiguration(
                     new TerserPlugin(),
                 ],
                 moduleIds: "deterministic",
+                nodeEnv: "production",
             }
             : {
                 chunkIds: "deterministic",
                 minimize: false,
                 moduleIds: "deterministic",
+                nodeEnv: "production",
             },
         output: {
             chunkFilename: minified
@@ -650,6 +649,7 @@ function createConfiguration(
         },
         plugins,
         resolve: {
+            conditionNames: ["webpack", "browser", "production"],
             extensions: configurationPolicy.resolveExtensions,
         },
         target: configurationPolicy.target,

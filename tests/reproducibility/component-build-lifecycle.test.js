@@ -648,7 +648,7 @@ test("the frozen Component target produces the accepted 72/144 definition", asyn
 
             assert.deepEqual(Object.keys(raw.entry), [entry.key]);
             assert.deepEqual(Object.keys(minified.entry), [entry.key]);
-            assert.equal(raw.mode, "production");
+            assert.equal(raw.mode, "development");
             assert.equal(minified.mode, "production");
 
             for (const configuration of [raw, minified])
@@ -661,6 +661,7 @@ test("the frozen Component target produces the accepted 72/144 definition", asyn
                 assert.equal(configuration.devtool, false);
                 assert.equal(configuration.target, "web");
                 assert.deepEqual(configuration.resolve, {
+                    conditionNames: ["webpack", "browser", "production"],
                     extensions: [".js", ".scss"],
                 });
                 assert.equal(configuration.output.pathinfo, false);

@@ -296,7 +296,7 @@ test("Core lifecycle freezes both fixed entries and raw/minified outputs", async
                 {
                     entry: "core",
                     filename: "js/core.js",
-                    mode: "production",
+                    mode: "development",
                     output: "core",
                     resources: 4,
                     sassIncludePaths: ["scss", "core"],
@@ -312,7 +312,7 @@ test("Core lifecycle freezes both fixed entries and raw/minified outputs", async
                 {
                     entry: "rule",
                     filename: "js/rule.js",
-                    mode: "production",
+                    mode: "development",
                     output: "rule",
                     resources: 4,
                     sassIncludePaths: ["scss", "core"],
@@ -328,7 +328,7 @@ test("Core lifecycle freezes both fixed entries and raw/minified outputs", async
                 {
                     entry: "utility.full",
                     filename: "js/utility.full.js",
-                    mode: "production",
+                    mode: "development",
                     output: "utility-full",
                     resources: 4,
                     sassIncludePaths: ["scss", "core"],

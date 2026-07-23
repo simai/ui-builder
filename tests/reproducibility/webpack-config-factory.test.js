@@ -764,6 +764,7 @@ test("policy values materialize exactly while deferred and dropped keys stay abs
             assert.equal(configuration.devtool, false);
             assert.equal(configuration.target, "web");
             assert.deepEqual(configuration.resolve, {
+                conditionNames: ["webpack", "browser", "production"],
                 extensions: [".js", ".scss"],
             });
             assert.equal(configuration.output.pathinfo, false);
@@ -939,7 +940,7 @@ test("all five semantic entries produce deterministic raw and minified pairs", (
                 mode: configuration.mode,
             })),
             first.plan.entries.flatMap(entry => [
-                { key: entry.key, mode: "production" },
+                { key: entry.key, mode: "development" },
                 { key: entry.key, mode: "production" },
             ]),
         );
@@ -1005,16 +1006,18 @@ test("minification is unambiguous and cannot be overwritten by a duplicate key",
             const raw = definition.configurations[index];
             const minified = definition.configurations[index + 1];
 
-            assert.equal(raw.mode, "production");
+            assert.equal(raw.mode, "development");
             assert.equal(minified.mode, "production");
             assert.deepEqual(raw.optimization, {
                 chunkIds: "deterministic",
                 minimize: false,
                 moduleIds: "deterministic",
+                nodeEnv: "production",
             });
             assert.equal(minified.optimization.chunkIds, "deterministic");
             assert.equal(minified.optimization.minimize, true);
             assert.equal(minified.optimization.moduleIds, "deterministic");
+            assert.equal(minified.optimization.nodeEnv, "production");
             assert.equal(minified.optimization.minimizer.length, 1);
             assert.ok(
                 minified.optimization.minimizer[0] instanceof TerserPluginStub,
