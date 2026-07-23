@@ -666,7 +666,6 @@ test("the frozen Component target produces the accepted 72/144 definition", asyn
                         "browser",
                         "production",
                         "import",
-                        "require",
                         "default",
                     ],
                     extensions: [".js", ".scss"],

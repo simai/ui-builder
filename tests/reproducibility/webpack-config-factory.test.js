@@ -769,7 +769,6 @@ test("policy values materialize exactly while deferred and dropped keys stay abs
                     "browser",
                     "production",
                     "import",
-                    "require",
                     "default",
                 ],
                 extensions: [".js", ".scss"],

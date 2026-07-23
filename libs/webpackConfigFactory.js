@@ -649,12 +649,18 @@ function createConfiguration(
         },
         plugins,
         resolve: {
+            // Source entries are authored as ESM. Keeping "require" active
+            // makes conditional packages such as prettier/standalone select
+            // their CommonJS wrapper even for an import statement. That
+            // wrapper marks itself as __esModule without exporting default,
+            // so Webpack's default-import bridge evaluates to undefined at
+            // runtime. Prefer import and let default cover packages that do
+            // not publish an explicit ESM condition.
             conditionNames: [
                 "webpack",
                 "browser",
                 "production",
                 "import",
-                "require",
                 "default",
             ],
             extensions: configurationPolicy.resolveExtensions,
