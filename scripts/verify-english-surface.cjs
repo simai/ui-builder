@@ -22,6 +22,11 @@ const EXCLUDED_DIRECTORIES = new Set([
     "source",
 ]);
 const CYRILLIC = /[\u0400-\u04ff]/u;
+const INCORRECT_BRAND_CASE = /\bSimai\b/u;
+const HISTORICAL_BRAND_CASE_EXCEPTIONS = new Set([
+    // Published before the casing policy existed; history is not rewritten.
+    "d19ca43a6e2d5d316a5a8b758ac16e9c77fad6a8",
+]);
 
 function filesUnder(directory)
 {
@@ -61,7 +66,20 @@ function cyrillicLocations(filePath)
             : []);
 }
 
-const failures = filesUnder(ROOT).flatMap(cyrillicLocations);
+function brandCaseLocations(filePath)
+{
+    return fs.readFileSync(filePath, "utf8")
+        .split(/\r?\n/u)
+        .flatMap((line, index) => INCORRECT_BRAND_CASE.test(line)
+            ? [`${path.relative(ROOT, filePath)}:${index + 1}`]
+            : []);
+}
+
+const repositoryFiles = filesUnder(ROOT);
+const failures = [
+    ...repositoryFiles.flatMap(cyrillicLocations),
+    ...repositoryFiles.flatMap(brandCaseLocations),
+];
 const gitDirectory = path.join(ROOT, ".git");
 
 if (fs.existsSync(gitDirectory))
@@ -78,18 +96,26 @@ if (fs.existsSync(gitDirectory))
         {
             failures.push(`git-history:${line.slice(0, 40)}`);
         }
+
+        const [revision] = line.split("\t", 1);
+
+        if (INCORRECT_BRAND_CASE.test(line)
+            && !HISTORICAL_BRAND_CASE_EXCEPTIONS.has(revision))
+        {
+            failures.push(`git-history-brand-case:${line.slice(0, 40)}`);
+        }
     }
 }
 
 if (failures.length > 0)
 {
     process.stderr.write(
-        "English-only repository surface check failed:\n"
+        "English and SIMAI brand surface check failed:\n"
         + `${failures.map(item => `- ${item}`).join("\n")}\n`,
     );
     process.exitCode = 1;
 }
 else
 {
-    process.stdout.write("English-only repository surface check: PASS\n");
+    process.stdout.write("English and SIMAI brand surface check: PASS\n");
 }

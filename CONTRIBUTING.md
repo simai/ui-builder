@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for improving Simai Framework UI Builder.
+Thank you for improving SIMAI Framework UI Builder.
 
 ## Language
 
@@ -11,6 +11,11 @@ English is the project language. Use English for:
 - issue and pull request titles and descriptions;
 - commit subjects and bodies;
 - GitHub repository metadata and workflow labels.
+
+The brand name is always written as `SIMAI`; mixed-case variants are incorrect.
+Lowercase `simai` is used only when it is part of a technical identifier,
+package scope, repository path, or URL, such as `@simai/ui-builder` and
+`simai/ui-loader`.
 
 Technical identifiers, external product names, and historical repository names
 may remain unchanged when translation would reduce accuracy or traceability.

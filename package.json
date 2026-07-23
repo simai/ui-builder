@@ -1,7 +1,7 @@
 {
   "name": "@simai/ui-builder",
   "version": "1.0.0",
-  "description": "Deterministic Webpack build system for Simai Framework Core, Component, Utility, and Smart layers",
+  "description": "Deterministic Webpack build system for SIMAI Framework Core, Component, Utility, and Smart layers",
   "private": true,
   "license": "UNLICENSED",
   "repository": {

@@ -1,6 +1,6 @@
 # Product runner reference
 
-Product runners build one Simai Framework product into a new output root and
+Product runners build one SIMAI Framework product into a new output root and
 write machine-readable diagnostics. They are intended for controlled
 automation and reproducibility checks.
 

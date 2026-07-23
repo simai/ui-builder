@@ -26,11 +26,11 @@ test("repository contract binds the accepted frozen builder runtime", () => {
     assert.equal(report.package_manager, "yarn@1.22.22");
 });
 
-test("tracked repository text follows the English-only policy", () => {
+test("tracked repository text follows the English and SIMAI brand policy", () => {
     const result = run("scripts/verify-english-surface.cjs");
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /English-only repository surface check: PASS/);
+    assert.match(result.stdout, /English and SIMAI brand surface check: PASS/);
 });
 
 test("removed modal target fails with an actionable compatibility message", () => {

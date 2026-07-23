@@ -29,6 +29,8 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Fixed
 
+- Standardized the brand spelling as `SIMAI` across documentation, package
+  metadata, automated checks, and GitHub repository metadata.
 - Stable module collision errors now include the colliding canonical module
   identifier.
 - Legacy `plugin` and missing `modal` commands now have explicit compatibility

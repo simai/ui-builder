@@ -1,7 +1,7 @@
-# Simai Framework UI Builder
+# SIMAI Framework UI Builder
 
 `ui-builder` is the reproducible Webpack build system for the Core, Component,
-Utility, and Smart layers of [Simai Framework](https://github.com/simai).
+Utility, and Smart layers of [SIMAI Framework](https://github.com/simai).
 
 The repository owns build planning, Webpack configuration, deterministic module
 and chunk identifiers, asset packaging, and reproducibility verification. The
@@ -32,9 +32,10 @@ yarn run verify
 Use `yarn run verify`, not `yarn verify`. Yarn Classic also defines `check` as a
 built-in command, so the explicit `run` form prevents command ambiguity.
 
-A successful `verify` run checks the repository contract, RTL-safe PostCSS
-policy, deterministic identifiers, packaging, gzip output, and isolated fixture
-builds. It does not publish or modify a generated distribution.
+A successful `verify` run checks the repository and English/SIMAI brand
+contracts, RTL-safe PostCSS policy, deterministic identifiers, packaging, gzip
+output, and isolated fixture builds. It does not publish or modify a generated
+distribution.
 
 ## Build commands
 
