@@ -99,6 +99,32 @@ test("gzip is byte-identical across independent roots", () => {
     }
 });
 
+test("generated JavaScript has deterministic trailing whitespace removed before gzip", () => {
+    const subject = fixture();
+    const javascript = writeFile(
+        subject.outputRoot,
+        "smart/modal/js/modal.js",
+        "const value = true; \t\n/******/ \t\n",
+    );
+
+    try
+    {
+        const result = materializeGeneratedPackaging(subject.plan);
+        const canonical = "const value = true;\n/******/\n";
+
+        assert.equal(fs.readFileSync(javascript, "utf8"), canonical);
+        assert.deepEqual(
+            zlib.gunzipSync(fs.readFileSync(`${javascript}.gz`)),
+            Buffer.from(canonical),
+        );
+        assert.deepEqual(result.normalizedText, [fs.realpathSync(javascript)]);
+    }
+    finally
+    {
+        fs.rmSync(subject.workspace, { force: true, recursive: true });
+    }
+});
+
 test("stylesheet-only compatibility JS materializes an empty URL artifact", () => {
     const subject = fixture();
     writeFile(
