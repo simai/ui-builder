@@ -5,9 +5,14 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const {
+    compatibilityFromEnvironment,
+    validateLegacyRuntimeCompatibility,
+} = require("../libs/legacyRuntimeCompatibility");
 
 const BUILDER_ROOT = path.resolve(__dirname, "..");
 const PRODUCTS = Object.freeze(["core", "component", "utility", "smart"]);
+const REQUIRE_LEGACY_COMPATIBILITY = "--require-legacy-compatibility";
 
 function fail(message)
 {
@@ -206,18 +211,54 @@ function runWave(waveName, workspaceRoot, uiLoaderRoot)
 
 function main()
 {
-    const [uiLoaderInput, workspaceInput] = process.argv.slice(2);
+    const [
+        uiLoaderInput,
+        workspaceInput,
+        compatibilityOption,
+        ...unexpectedArguments
+    ] = process.argv.slice(2);
 
     if (!uiLoaderInput || !workspaceInput
         || !path.isAbsolute(uiLoaderInput)
-        || !path.isAbsolute(workspaceInput))
+        || !path.isAbsolute(workspaceInput)
+        || unexpectedArguments.length !== 0
+        || (compatibilityOption
+            && compatibilityOption !== REQUIRE_LEGACY_COMPATIBILITY))
     {
-        fail("usage: verify-product-reproducibility.cjs <absolute-ui-loader-root> <new-absolute-workspace-root>");
+        fail(
+            "usage: verify-product-reproducibility.cjs "
+            + "<absolute-ui-loader-root> <new-absolute-workspace-root> "
+            + "[--require-legacy-compatibility]",
+        );
         return;
     }
 
     const uiLoaderRoot = path.resolve(uiLoaderInput);
     const workspaceRoot = path.resolve(workspaceInput);
+    let legacyCompatibility;
+
+    try
+    {
+        const environmentCompatibility = compatibilityFromEnvironment();
+
+        if (compatibilityOption === REQUIRE_LEGACY_COMPATIBILITY
+            && !environmentCompatibility)
+        {
+            throw new Error(
+                "--require-legacy-compatibility requires all "
+                + "SF_LEGACY_COMPATIBILITY_* variables",
+            );
+        }
+
+        legacyCompatibility = validateLegacyRuntimeCompatibility(
+            environmentCompatibility,
+        );
+    }
+    catch (error)
+    {
+        fail(error && error.message ? error.message : String(error));
+        return;
+    }
 
     if (!fs.existsSync(path.join(uiLoaderRoot, "package.json"))
         || !fs.existsSync(path.join(uiLoaderRoot, "yarn.lock"))
@@ -244,9 +285,21 @@ function main()
 
     const report = {
         builder_root: BUILDER_ROOT,
+        legacy_compatibility: legacyCompatibility ? {
+            enabled: true,
+            manifest: legacyCompatibility.manifest,
+            manifest_sha256: sha256(
+                fs.readFileSync(legacyCompatibility.manifest),
+            ),
+            records_count: legacyCompatibility.records.length,
+            revision: legacyCompatibility.revision,
+            root: legacyCompatibility.root,
+        } : {
+            enabled: false,
+        },
         node: process.version,
         products: {},
-        schema_version: 1,
+        schema_version: 2,
         status: "PASS",
         ui_loader_root: uiLoaderRoot,
         waves: {},

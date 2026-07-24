@@ -46,9 +46,32 @@ test("product verifier rejects incomplete and relative invocations", () => {
         "scripts/verify-product-reproducibility.cjs",
         ["../ui-loader", "output"],
     );
+    const unknownOption = run(
+        "scripts/verify-product-reproducibility.cjs",
+        ["/tmp/ui-loader", "/tmp/output", "--unknown"],
+    );
 
     assert.equal(missing.status, 2);
     assert.equal(relative.status, 2);
+    assert.equal(unknownOption.status, 2);
     assert.match(missing.stderr, /usage:/);
     assert.match(relative.stderr, /usage:/);
+    assert.match(unknownOption.stderr, /usage:/);
+});
+
+test("product verifier can require an explicit legacy compatibility binding", () => {
+    const result = run(
+        "scripts/verify-product-reproducibility.cjs",
+        [
+            "/tmp/ui-loader",
+            "/tmp/output",
+            "--require-legacy-compatibility",
+        ],
+    );
+
+    assert.equal(result.status, 2);
+    assert.match(
+        result.stderr,
+        /requires all SF_LEGACY_COMPATIBILITY_\* variables/,
+    );
 });

@@ -63,6 +63,13 @@ node scripts/verify-product-reproducibility.cjs \
 Review `<workspace>/report.json`. A successful report has `status: "PASS"` and
 `byte_identical: true` for all four products.
 
+If the target distribution retains accepted legacy runtime assets, also set
+`SF_LEGACY_COMPATIBILITY_ROOT`, `SF_LEGACY_COMPATIBILITY_MANIFEST`, and
+`SF_LEGACY_COMPATIBILITY_REVISION`, then append
+`--require-legacy-compatibility`. This mode fails before the build when the
+binding is absent, partial, or inconsistent and records the validated binding
+in the report.
+
 ## Next steps
 
 - Read [Architecture and ownership](architecture.md) before changing pipeline

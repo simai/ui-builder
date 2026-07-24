@@ -95,6 +95,26 @@ byte-identical between both waves. Evidence is written to
 `<workspace>/report.json`. Existing `ui` and `ui-smart` checkouts are not
 required and are not modified.
 
+When a release must retain digest-bound runtime assets from an accepted legacy
+distribution, bind all three compatibility inputs and require that mode
+explicitly:
+
+```bash
+export SF_LEGACY_COMPATIBILITY_ROOT=/absolute/path/to/accepted-ui/distr
+export SF_LEGACY_COMPATIBILITY_MANIFEST=/absolute/path/to/lineage.json
+export SF_LEGACY_COMPATIBILITY_REVISION=<exact-ui-revision>
+
+node scripts/verify-product-reproducibility.cjs \
+  /absolute/path/to/ui-loader \
+  /absolute/path/to/new-workspace \
+  --require-legacy-compatibility
+```
+
+The verifier validates the binding before creating the workspace and records
+its revision, manifest digest, record count, and resolved paths in
+`report.json`. The two-argument form remains available for source-only builds
+that intentionally do not materialize legacy runtime assets.
+
 ## GitHub Actions
 
 - **CI** performs a frozen install and runs `yarn run verify` on pushes and pull

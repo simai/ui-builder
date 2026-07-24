@@ -94,3 +94,9 @@ consistent:
 - `SF_LEGACY_COMPATIBILITY_REVISION`.
 
 A partial or mismatched binding fails closed.
+
+For a two-wave release check that is required to retain these assets, invoke
+`verify-product-reproducibility.cjs` with
+`--require-legacy-compatibility`. This prevents an accidental source-only run
+from being accepted as evidence for a compatibility-bound release and records
+the validated binding in `report.json`.
