@@ -51,6 +51,22 @@ node scripts/run-component-utility-product-build.cjs \
   /absolute/path/to/component-diagnostics.json
 ```
 
+For a memory-bounded Utility build, set
+`SF_PRODUCT_ENTRY_FILTER_MANIFEST` to an absolute regular JSON file:
+
+```json
+{
+  "schemaVersion": 1,
+  "target": "utility",
+  "entryKeys": ["utility/gap/default", "utility/padding/default"]
+}
+```
+
+The lifecycle validates every requested key against the complete source plan,
+then compiles and packages only those entries. Component builds reject the
+filter. Multiple shard outputs may be merged only when colliding paths are
+byte-identical.
+
 ## Smart
 
 ```bash

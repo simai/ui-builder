@@ -259,12 +259,60 @@ function readUsage(options, runtime)
 
     return {
         adapters,
+        entryKeys: options.entryKeys === undefined
+            ? null
+            : validateEntryKeys(options.entryKeys),
         legacyCompatibility: validateLegacyRuntimeCompatibility(options.legacyCompatibility),
         outputRoot: options.outputRoot,
         reporter,
         sourceRoot: options.sourceRoot,
         webpack,
     };
+}
+
+function validateEntryKeys(value)
+{
+    if (!Array.isArray(value)
+        || value.length === 0
+        || value.some(entry => typeof entry !== "string"
+            || !entry.startsWith("utility/")
+            || entry.endsWith("/")
+            || entry.includes("\\")
+            || entry.split("/").some(segment =>
+                segment.length === 0 || segment === "." || segment === ".."))
+        || new Set(value).size !== value.length)
+    {
+        throw new TypeError(
+            "entryKeys must be a non-empty unique array of portable utility/* keys",
+        );
+    }
+
+    return [...value].sort();
+}
+
+function applyUtilityEntryFilter(definition, entryKeys)
+{
+    if (!entryKeys)
+    {
+        return;
+    }
+
+    const requested = new Set(entryKeys);
+    const available = new Set(definition.plan.entries.map(entry => entry.key));
+    const missing = entryKeys.filter(entry => !available.has(entry));
+
+    if (missing.length > 0)
+    {
+        throw new Error(`entryKeys contain unknown entries: ${missing.join(", ")}`);
+    }
+
+    definition.plan.entries = definition.plan.entries.filter(entry =>
+        requested.has(entry.key));
+    definition.configurations = definition.configurations.filter(configuration =>
+        Object.keys(configuration.entry).some(entry => requested.has(entry)));
+    definition.plan.templates = definition.plan.templates.filter(template =>
+        requested.has(`utility/${template.component}`));
+    definition.templateCopies = definition.plan.templates;
 }
 
 function usageReporter(runtime)
@@ -608,6 +656,16 @@ async function runBuild(options, runtime, profile)
             targets: profile.targets,
         }, usage.adapters);
         definition.plan.legacyCompatibility = usage.legacyCompatibility;
+
+        if (usage.entryKeys && profile !== UTILITY_PROFILE)
+        {
+            throw new Error("entryKeys are supported only by the utility lifecycle");
+        }
+
+        if (profile === UTILITY_PROFILE)
+        {
+            applyUtilityEntryFilter(definition, usage.entryKeys);
+        }
 
         if (profile === CORE_PROFILE || profile === UTILITY_PROFILE)
         {

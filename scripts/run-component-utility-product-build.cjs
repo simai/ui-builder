@@ -85,6 +85,43 @@ function validatedArguments(received)
     );
 }
 
+function entryKeysFromEnvironment(product)
+{
+    const manifestPath = process.env.SF_PRODUCT_ENTRY_FILTER_MANIFEST;
+
+    if (!manifestPath)
+    {
+        return null;
+    }
+
+    if (product !== "utility" || !path.isAbsolute(manifestPath))
+    {
+        throw new Error(
+            "SF_PRODUCT_ENTRY_FILTER_MANIFEST requires utility and an absolute path",
+        );
+    }
+
+    const stat = fs.lstatSync(manifestPath);
+
+    if (stat.isSymbolicLink() || !stat.isFile())
+    {
+        throw new Error("entry filter manifest must be a regular file");
+    }
+
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+
+    if (!manifest
+        || Object.keys(manifest).sort().join(",") !== "entryKeys,schemaVersion,target"
+        || manifest.schemaVersion !== 1
+        || manifest.target !== "utility"
+        || !Array.isArray(manifest.entryKeys))
+    {
+        throw new Error("entry filter manifest is invalid");
+    }
+
+    return manifest.entryKeys;
+}
+
 const usage = validatedArguments(process.argv.slice(2));
 
 if (usage)
@@ -179,6 +216,20 @@ if (usage)
     };
 
     const buildOptions = { sourceRoot, outputRoot };
+    try
+    {
+        const entryKeys = entryKeysFromEnvironment(product);
+        if (entryKeys) buildOptions.entryKeys = entryKeys;
+    }
+    catch (error)
+    {
+        reportInvocationFailure(
+            "INVALID_ENTRY_FILTER_MANIFEST",
+            error && error.message ? error.message : String(error),
+            {},
+        );
+        return;
+    }
     const legacyCompatibility = compatibilityFromEnvironment();
     if (legacyCompatibility) buildOptions.legacyCompatibility = legacyCompatibility;
 

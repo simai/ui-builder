@@ -16,6 +16,7 @@ const PLAN_PATH = require.resolve("../../libs/buildPlan");
 
 const {
     runComponentBuild,
+    runUtilityBuild,
 } = require(LIFECYCLE_PATH);
 const {
     createWebpackBuildDefinition,
@@ -772,6 +773,60 @@ test("success calls Webpack, run and close exactly once", async () => {
         assert.deepEqual(diagnostics, []);
         assert.deepEqual(snapshotTree(workspace.sourceRoot), sourceBefore);
         assert.equal(fs.existsSync(workspace.outputRoot), false);
+    }
+    finally
+    {
+        removeWorkspace(workspace.workspace);
+    }
+});
+
+test("Utility entryKeys filter configurations and packaging plan fail closed", async () => {
+    const workspace = makeWorkspace("sf-utility-entry-filter-");
+    const diagnostics = [];
+    let observedConfigurations;
+
+    writeFile(workspace.sourceRoot, "core/scss/.keep", "");
+    writeFile(
+        workspace.sourceRoot,
+        "utility/alpha/default/index.scss",
+        ".alpha {}\n",
+    );
+    writeFile(
+        workspace.sourceRoot,
+        "utility/beta/default/index.scss",
+        ".beta {}\n",
+    );
+
+    try
+    {
+        const status = await runUtilityBuild({
+            entryKeys: ["utility/beta/default"],
+            outputRoot: workspace.outputRoot,
+            sourceRoot: workspace.sourceRoot,
+        }, validRuntime(configurations => {
+            observedConfigurations = configurations;
+            return successfulCompiler({ close: 0, run: 0 });
+        }, diagnostic => diagnostics.push(diagnostic)));
+
+        assert.equal(status, 0);
+        assert.deepEqual(diagnostics, []);
+        assert.equal(observedConfigurations.length, 2);
+        assert.ok(observedConfigurations.every(configuration =>
+            Object.keys(configuration.entry)[0] === "utility/beta/default"));
+
+        const missingDiagnostics = [];
+        const missingStatus = await runUtilityBuild({
+            entryKeys: ["utility/missing/default"],
+            outputRoot: path.join(workspace.workspace, "missing-output"),
+            sourceRoot: workspace.sourceRoot,
+        }, validRuntime(() => {
+            throw new Error("Webpack must not run for an unknown entry");
+        }, diagnostic => missingDiagnostics.push(diagnostic)));
+
+        assert.equal(missingStatus, 2);
+        assert.equal(missingDiagnostics.length, 1);
+        assert.equal(missingDiagnostics[0].phase, "plan");
+        assert.match(missingDiagnostics[0].message, /unknown entries/);
     }
     finally
     {
