@@ -98,7 +98,10 @@ A partial or mismatched binding fails closed.
 The root may be a read-only corpus assembled from multiple exact generated
 revisions. Every manifest record is still verified by path, size, and SHA-256
 before it can be materialized. Component and Smart compatibility records are
-copied only into their matching product outputs.
+copied only into their matching product outputs. Records are restricted to the
+generated `core/`, `component/`, and `smart/` namespaces; paths outside those
+namespaces, path escapes, digest drift, and non-identical output collisions
+fail closed.
 
 For a two-wave release check that is required to retain these assets, invoke
 `verify-product-reproducibility.cjs` with

@@ -35,6 +35,8 @@ All notable changes to `ui-builder` are documented in this file.
   filesystem roots, including the macOS `/tmp` to `/private/tmp` alias.
 - Digest-bound compatibility materialization now retains removed Component and
   Smart URL surfaces in addition to legacy Core runtime chunks.
+- Compatibility retention now covers the complete generated Core, Component,
+  and Smart namespaces while preserving path, digest, and collision gates.
 - Stable module collision errors now include the colliding canonical module
   identifier.
 - Legacy `plugin` and missing `modal` commands now have explicit compatibility

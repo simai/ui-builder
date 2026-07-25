@@ -71,11 +71,11 @@ test("digest-bound legacy chunks materialize only for the matching product", () 
     }
 });
 
-test("removed Component and Smart URL surfaces remain compatibility targets", () => {
+test("the complete Component and Smart namespaces remain compatibility targets", () => {
     const subject = fixture();
     try
     {
-        const smartRelative = "smart/editor/js/editor.js";
+        const smartRelative = "smart/modal/js/modal.js";
         const smartContent = Buffer.from("legacy smart bundle\n");
         const smartSource = path.join(subject.root, smartRelative);
         fs.mkdirSync(path.dirname(smartSource), {recursive: true});
@@ -104,6 +104,25 @@ test("removed Component and Smart URL surfaces remain compatibility targets", ()
             fs.readFileSync(path.join(subject.outputRoot, smartRelative)),
             smartContent,
         );
+    }
+    finally
+    {
+        fs.rmSync(subject.workspace, {force: true, recursive: true});
+    }
+});
+
+test("compatibility records outside generated product namespaces fail closed", () => {
+    const subject = fixture();
+    try
+    {
+        const manifest = JSON.parse(fs.readFileSync(subject.manifest, "utf8"));
+        manifest.records[0].path = "utility/display/css/display.css";
+        fs.writeFileSync(subject.manifest, JSON.stringify(manifest));
+        assert.throws(() => validateLegacyRuntimeCompatibility({
+            manifest: subject.manifest,
+            revision: "ui-revision",
+            root: subject.root,
+        }), /invalid legacy compatibility record/);
     }
     finally
     {
