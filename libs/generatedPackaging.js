@@ -27,6 +27,9 @@ const GZIP_EXTENSIONS = Object.freeze(new Set([
     ".json",
     ".svg",
 ]));
+const NORMALIZED_TEXT_EXTENSIONS = Object.freeze(new Set([
+    ".js",
+]));
 
 function compareCodeUnits(left, right)
 {
@@ -461,6 +464,36 @@ function materializeDeterministicGzip(outputRoot)
     return written;
 }
 
+function normalizeGeneratedTextWhitespace(outputRoot)
+{
+    if (!fs.existsSync(outputRoot))
+    {
+        return [];
+    }
+
+    const canonicalRoot = assertRegularTree(outputRoot, "outputRoot");
+    const normalized = [];
+
+    for (const source of walkRegularFiles(canonicalRoot, "generated output tree"))
+    {
+        if (!NORMALIZED_TEXT_EXTENSIONS.has(path.extname(source).toLowerCase()))
+        {
+            continue;
+        }
+
+        const original = fs.readFileSync(source, "utf8");
+        const canonical = original.replace(/[ \t]+$/gmu, "");
+
+        if (canonical !== original)
+        {
+            fs.writeFileSync(source, canonical);
+            normalized.push(source);
+        }
+    }
+
+    return normalized;
+}
+
 function materializeGeneratedPackaging(plan)
 {
     if (!fs.existsSync(plan.outputRoot))
@@ -470,6 +503,7 @@ function materializeGeneratedPackaging(plan)
             aggregateAssets: [],
             gzip: [],
             legacyRuntimeCompatibility: [],
+            normalizedText: [],
             ruleManifests: [],
             sourceAssets: [],
         };
@@ -483,6 +517,7 @@ function materializeGeneratedPackaging(plan)
     ];
     const ruleManifests = materializeRuleManifest(plan);
     const legacyRuntimeCompatibility = materializeLegacyRuntimeCompatibility(plan);
+    const normalizedText = normalizeGeneratedTextWhitespace(plan.outputRoot);
     const gzip = materializeDeterministicGzip(plan.outputRoot);
 
     return {
@@ -490,6 +525,7 @@ function materializeGeneratedPackaging(plan)
         compatibilityScripts,
         gzip,
         legacyRuntimeCompatibility,
+        normalizedText,
         ruleManifests,
         sourceAssets,
     };
@@ -499,5 +535,6 @@ module.exports = {
     materializeDeterministicGzip,
     materializeEmptyCompatibilityScripts,
     materializeGeneratedPackaging,
+    normalizeGeneratedTextWhitespace,
     materializeSourceAssets,
 };
