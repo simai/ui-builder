@@ -71,6 +71,46 @@ test("digest-bound legacy chunks materialize only for the matching product", () 
     }
 });
 
+test("removed Component and Smart URL surfaces remain compatibility targets", () => {
+    const subject = fixture();
+    try
+    {
+        const smartRelative = "smart/editor/js/editor.js";
+        const smartContent = Buffer.from("legacy smart bundle\n");
+        const smartSource = path.join(subject.root, smartRelative);
+        fs.mkdirSync(path.dirname(smartSource), {recursive: true});
+        fs.writeFileSync(smartSource, smartContent);
+        const manifest = JSON.parse(fs.readFileSync(subject.manifest, "utf8"));
+        manifest.records.push({
+            path: smartRelative,
+            sha256: digest(smartContent),
+            size: smartContent.length,
+        });
+        manifest.summary = {runtime_base_paths: 2, runtime_paths: 4};
+        fs.writeFileSync(subject.manifest, JSON.stringify(manifest));
+
+        const written = materializeLegacyRuntimeCompatibility({
+            entries: [{target: "smart"}],
+            legacyCompatibility: {
+                manifest: subject.manifest,
+                revision: "ui-revision",
+                root: subject.root,
+            },
+            outputRoot: subject.outputRoot,
+        });
+
+        assert.equal(written.length, 1);
+        assert.deepEqual(
+            fs.readFileSync(path.join(subject.outputRoot, smartRelative)),
+            smartContent,
+        );
+    }
+    finally
+    {
+        fs.rmSync(subject.workspace, {force: true, recursive: true});
+    }
+});
+
 test("manifest digest, revision, collision and partial environment fail closed", () => {
     const subject = fixture();
     try

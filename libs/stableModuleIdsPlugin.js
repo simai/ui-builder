@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("node:crypto");
+const fs = require("node:fs");
 const path = require("node:path");
 
 const PLUGIN_NAME = "SfStableModuleIdsPlugin";
@@ -27,12 +28,28 @@ function canonicalRootEntries(roots)
             throw new TypeError(`${name} must be an absolute path`);
         }
 
-        const canonical = path.resolve(root);
+        const lexical = path.resolve(root);
+        const candidates = [lexical];
 
-        if (!seen.has(canonical))
+        try
         {
-            seen.add(canonical);
-            entries.push([canonical, `<sf:${name}>`]);
+            candidates.push(fs.realpathSync.native(lexical));
+        }
+        catch (error)
+        {
+            if (error.code !== "ENOENT")
+            {
+                throw error;
+            }
+        }
+
+        for (const canonical of candidates)
+        {
+            if (!seen.has(canonical))
+            {
+                seen.add(canonical);
+                entries.push([canonical, `<sf:${name}>`]);
+            }
         }
     }
 

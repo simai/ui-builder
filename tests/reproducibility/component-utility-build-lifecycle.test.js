@@ -225,13 +225,36 @@ test("Component runner resolves build dependencies from a disposable runtime", (
         assert.equal(configuration.optimization.chunkIds, false);
         assert.equal(configuration.optimization.moduleIds, false);
         assert.equal(configuration.plugins.length, 1);
+        const expectedRoots = [];
+        const seenRoots = new Set();
+        for (const [root, replacement] of [
+            [runtimeRoot, "<sf:builder-dependencies>"],
+            [builderRoot, "<sf:builder-source>"],
+            [sourceRoot, "<sf:product-source>"],
+        ])
+        {
+            const rootCandidates = [path.resolve(root)];
+            try
+            {
+                rootCandidates.push(fs.realpathSync.native(root));
+            }
+            catch (error)
+            {
+                assert.equal(error.code, "ENOENT");
+            }
+            for (const candidate of rootCandidates)
+            {
+                if (!seenRoots.has(candidate))
+                {
+                    seenRoots.add(candidate);
+                    expectedRoots.push([candidate, replacement]);
+                }
+            }
+        }
+        expectedRoots.sort((left, right) => right[0].length - left[0].length);
         assert.deepEqual(
             configuration.plugins[0].roots,
-            [
-                [runtimeRoot, "<sf:builder-dependencies>"],
-                [builderRoot, "<sf:builder-source>"],
-                [sourceRoot, "<sf:product-source>"],
-            ],
+            expectedRoots,
         );
         assert.equal(
             configuration.resolveLoader.modules[0],

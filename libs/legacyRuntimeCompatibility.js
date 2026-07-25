@@ -6,8 +6,25 @@ const path = require("node:path");
 
 const BATCH = "RTL-3I-LEGACY-RUNTIME-LINEAGE";
 const TARGET_PREFIXES = Object.freeze({
-    component: ["component/highlight/js/", "component/monaco/js/"],
+    component: [
+        "component/flags/",
+        "component/highlight/js/",
+        "component/list/",
+        "component/monaco/js/",
+        "component/rating/",
+    ],
     core: ["core/js/"],
+    smart: [
+        "smart/alert/",
+        "smart/editor/",
+        "smart/fab/",
+        "smart/file-preview/",
+        "smart/flags/",
+        "smart/form/",
+        "smart/link/",
+        "smart/list/",
+        "smart/rating/",
+    ],
 });
 
 function compareCodeUnits(left, right)

@@ -1,6 +1,8 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
@@ -153,6 +155,53 @@ test("module ids do not depend on disposable runtime root names", () => {
 
 test("chunk ids derive from stable module ids", () => {
     assert.equal(assignedChunkIds("one"), assignedChunkIds("two"));
+});
+
+test("module ids normalize lexical and real paths for symlinked roots", t => {
+    const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "sf-stable-ids-"));
+    const realRoot = path.join(temporaryRoot, "real");
+    const linkedRoot = path.join(temporaryRoot, "linked");
+
+    t.after(() => fs.rmSync(temporaryRoot, { recursive: true, force: true }));
+    fs.mkdirSync(realRoot);
+    fs.symlinkSync(realRoot, linkedRoot, "dir");
+
+    function identifierFor(root, identifier)
+    {
+        const compilationHook = hook();
+        const moduleIdsHook = hook();
+        const chunkIdsHook = hook();
+        const ids = new Map();
+        const module = { identifier: () => identifier };
+        const compilation = {
+            chunkGraph: {
+                getModuleId: candidate => ids.has(candidate)
+                    ? ids.get(candidate)
+                    : null,
+                setModuleId: (candidate, id) => ids.set(candidate, id),
+            },
+            chunks: [],
+            hooks: { chunkIds: chunkIdsHook, moduleIds: moduleIdsHook },
+            modules: [module],
+        };
+        const compiler = { hooks: { compilation: compilationHook } };
+
+        new StableModuleIdsPlugin({ source: root }).apply(compiler);
+        compilationHook.handler(compilation);
+        moduleIdsHook.handler([module]);
+
+        return ids.get(module);
+    }
+
+    const relativeModule = path.join("component", "index.js");
+
+    assert.equal(
+        identifierFor(linkedRoot, path.join(linkedRoot, relativeModule)),
+        identifierFor(
+            linkedRoot,
+            path.join(fs.realpathSync.native(realRoot), relativeModule),
+        ),
+    );
 });
 
 test("plugin rejects missing, empty and relative roots", () => {
