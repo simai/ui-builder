@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
@@ -74,4 +75,13 @@ test("product verifier can require an explicit legacy compatibility binding", ()
         result.stderr,
         /requires all SF_LEGACY_COMPATIBILITY_\* variables/,
     );
+});
+
+test("hosted product reproducibility has a bounded heap contract", () => {
+    const workflow = fs.readFileSync(
+        path.join(ROOT, ".github/workflows/product-reproducibility.yml"),
+        "utf8",
+    );
+
+    assert.match(workflow, /NODE_OPTIONS: --max-old-space-size=4096/);
 });

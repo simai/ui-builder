@@ -15,6 +15,11 @@ jobs:
   build-pairs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      # Utility generation exceeds Node's ~2 GiB default heap on the hosted
+      # runner, while the same frozen build completes reproducibly with a
+      # bounded 4 GiB heap. Keep the limit explicit and below runner memory.
+      NODE_OPTIONS: --max-old-space-size=4096
 
     steps:
       - name: Checkout ui-builder
