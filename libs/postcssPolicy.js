@@ -1,6 +1,12 @@
 "use strict";
 
+const path = require("node:path");
+
 const LOGICAL_PROPERTIES_FEATURE = "logical-properties-and-values";
+const LATE_LOGICAL_FALLBACK_PLUGIN = path.resolve(
+    __dirname,
+    "postcssLateLogicalFallbacks.js",
+);
 
 function cloneJsonLike(value)
 {
@@ -47,10 +53,13 @@ function createPostcssPresetEnvOptions(options = {})
 
 function createPostcssPlugins(options = {})
 {
-    return [[
-        "postcss-preset-env",
-        createPostcssPresetEnvOptions(options),
-    ]];
+    return [
+        [
+            "postcss-preset-env",
+            createPostcssPresetEnvOptions(options),
+        ],
+        [LATE_LOGICAL_FALLBACK_PLUGIN, {}],
+    ];
 }
 
 function createPostcssOptions(options = {})
@@ -85,11 +94,24 @@ function assertRtlSafePostcssPlugins(plugins, label = "postcss plugins")
         );
     }
 
+    const cleanup = plugins.find(plugin =>
+        Array.isArray(plugin)
+        && plugin.length === 2
+        && plugin[0] === LATE_LOGICAL_FALLBACK_PLUGIN);
+
+    if (!cleanup)
+    {
+        throw new TypeError(
+            `${label} must remove late generated logical fallbacks`,
+        );
+    }
+
     return true;
 }
 
 module.exports = {
     LOGICAL_PROPERTIES_FEATURE,
+    LATE_LOGICAL_FALLBACK_PLUGIN,
     assertRtlSafePostcssPlugins,
     createPostcssOptions,
     createPostcssPlugins,

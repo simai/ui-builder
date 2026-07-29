@@ -15,6 +15,9 @@ const {
 const {
     createWebpackBuildDefinition,
 } = require("../../libs/webpackConfigFactory");
+const {
+    createPostcssPlugins,
+} = require("../../libs/postcssPolicy");
 
 const FACTORY_PATH = require.resolve("../../libs/webpackConfigFactory");
 const PLAN_PATH = require.resolve("../../libs/buildPlan");
@@ -68,23 +71,15 @@ function configurationPolicy(overrides = {})
     return {
         devtool: false,
         postcss: {
-            plugins: [[
-                "postcss-preset-env",
-                {
-                    autoprefixer: {
-                        backgroundColor: false,
-                        borderColor: false,
-                        color: false,
-                        position: true,
-                    },
-                    browsers: "last 1 version, >1%",
-                    features: {
-                        "logical-properties-and-values": {
-                            preserve: true,
-                        },
-                    },
+            plugins: createPostcssPlugins({
+                autoprefixer: {
+                    backgroundColor: false,
+                    borderColor: false,
+                    color: false,
+                    position: true,
                 },
-            ]],
+                browsers: "last 1 version, >1%",
+            }),
         },
         resolveExtensions: [".js", ".scss"],
         target: "web",
@@ -846,6 +841,7 @@ test("caller and configuration policy mutations are isolated at every nested lev
                         },
                     },
                 }],
+                createPostcssPlugins()[1],
             ],
         },
     });

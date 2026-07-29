@@ -5,24 +5,28 @@ const crypto = require("node:crypto");
 
 const postcss = require("postcss");
 const postcssPresetEnv = require("postcss-preset-env");
+const lateLogicalFallbacks = require(
+    "../../libs/postcssLateLogicalFallbacks",
+);
 
 const {
     createPostcssPresetEnvOptions,
 } = require("../../libs/postcssPolicy");
 
 const DECLARATIONS = [
-    ["margin-inline-start", "1rem", "margin-left", "margin-right"],
-    ["padding-inline-end", "2rem", "padding-right", "padding-left"],
-    ["inset-inline-end", "3rem", "right", "left"],
+    ["margin-inline-start", "--margin", "1rem", "margin-left", "margin-right"],
+    ["padding-inline-end", "--padding", "2rem", "padding-right", "padding-left"],
+    ["inset-inline-end", "--position", "3rem", "right", "left"],
     [
         "border-inline-start-width",
+        "--border-width",
         "4px",
         "border-left-width",
         "border-right-width",
     ],
 ];
-const INPUT = `.fixture { ${DECLARATIONS.map(([property, value]) =>
-    `${property}: ${value}`).join("; ")}; }`;
+const INPUT = `.fixture { ${DECLARATIONS.map(([property, variable, fallback]) =>
+    `${property}: var(${variable}, ${fallback})`).join("; ")}; }`;
 
 function sha256(value)
 {
@@ -36,19 +40,35 @@ function checkOutput(css)
             && /\[dir="rtl"\]/.test(css),
         logicalRetained: true,
         logicalAfterFallbacks: true,
+        noLateFallbackOverride: true,
         physicalFallbacks: true,
     };
 
-    for (const [logical, value, ltrProperty, rtlProperty] of DECLARATIONS)
+    for (const [
+        logical,
+        variable,
+        fallback,
+        ltrProperty,
+        rtlProperty,
+    ] of DECLARATIONS)
     {
+        const value = `var\\(${variable},\\s*${fallback}\\)`;
         const logicalIndex = css.search(new RegExp(`${logical}:\\s*${value}`));
         const ltrIndex = css.search(new RegExp(`${ltrProperty}:\\s*${value}`));
         const rtlIndex = css.search(new RegExp(`${rtlProperty}:\\s*${value}`));
+        const lateLtr = new RegExp(
+            `${ltrProperty}:\\s*${fallback};?\\s*\\}`,
+        );
+        const lateRtl = new RegExp(
+            `${rtlProperty}:\\s*${fallback};?\\s*\\}`,
+        );
 
         checks.logicalRetained &&= logicalIndex >= 0;
         checks.physicalFallbacks &&= ltrIndex >= 0 && rtlIndex >= 0;
         checks.logicalAfterFallbacks &&= logicalIndex > ltrIndex
             && logicalIndex > rtlIndex;
+        checks.noLateFallbackOverride &&= !lateLtr.test(css)
+            && !lateRtl.test(css);
     }
 
     return checks;
@@ -67,6 +87,7 @@ async function transform(input)
     });
     const result = await postcss([
         postcssPresetEnv(options),
+        lateLogicalFallbacks(),
     ]).process(input, { from: undefined });
 
     return result.css;
@@ -99,6 +120,7 @@ async function main()
         node_version: process.version,
         policy: {
             feature: "logical-properties-and-values",
+            late_fallback_cleanup: true,
             preserve: true,
         },
         variants,

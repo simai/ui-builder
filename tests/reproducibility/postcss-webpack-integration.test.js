@@ -27,10 +27,12 @@ const {
 
 const INPUT = [
     ".fixture {",
-    "  margin-inline-start: 1rem;",
-    "  padding-inline-end: 2rem;",
-    "  inset-inline-end: 3rem;",
-    "  border-inline-start-width: 4px;",
+    "  margin-inline-start: var(--margin, 1rem);",
+    "  padding-inline-end: var(--padding, 2rem);",
+    "  inset-inline-end: var(--position, 3rem);",
+    "  border-inline-start-width: var(--border-width, 4px);",
+    "  border-inline-end-color: var(--border-color, red);",
+    "  color: var(--text-color, blue);",
     "}",
     "",
 ].join("\n");
@@ -98,20 +100,27 @@ function assertRtlSafeOutput(css, label)
 {
     assert.match(css, /\[dir="ltr"\]/, label);
     assert.match(css, /\[dir="rtl"\]/, label);
-    assert.match(css, /margin-inline-start:\s*1rem/, label);
-    assert.match(css, /padding-inline-end:\s*2rem/, label);
-    assert.match(css, /inset-inline-end:\s*3rem/, label);
-    assert.match(css, /border-inline-start-width:\s*4px/, label);
+    assert.match(css, /margin-inline-start:\s*var\(--margin,\s*1rem\)/, label);
+    assert.match(css, /padding-inline-end:\s*var\(--padding,\s*2rem\)/, label);
+    assert.match(css, /inset-inline-end:\s*var\(--position,\s*3rem\)/, label);
+    assert.match(css, /border-inline-start-width:\s*var\(--border-width,\s*4px\)/, label);
+    assert.match(css, /color:\s*var\(--text-color,\s*blue\)/, label);
     assert.ok(
-        css.search(/margin-inline-start:\s*1rem/)
-            > css.search(/margin-left:\s*1rem/),
+        css.search(/margin-inline-start:\s*var\(--margin,\s*1rem\)/)
+            > css.search(/margin-left:\s*var\(--margin,\s*1rem\)/),
         label,
     );
     assert.ok(
-        css.search(/margin-inline-start:\s*1rem/)
-            > css.search(/margin-right:\s*1rem/),
+        css.search(/margin-inline-start:\s*var\(--margin,\s*1rem\)/)
+            > css.search(/margin-right:\s*var\(--margin,\s*1rem\)/),
         label,
     );
+    assert.doesNotMatch(css, /border-left-width:\s*4px;?\s*\}/, label);
+    assert.doesNotMatch(css, /border-right-width:\s*4px;?\s*\}/, label);
+    assert.doesNotMatch(css, /padding-left:\s*2rem;?\s*\}/, label);
+    assert.doesNotMatch(css, /padding-right:\s*2rem;?\s*\}/, label);
+    assert.doesNotMatch(css, /left:\s*3rem;?\s*\}/, label);
+    assert.doesNotMatch(css, /right:\s*3rem;?\s*\}/, label);
 }
 
 async function buildOnce()

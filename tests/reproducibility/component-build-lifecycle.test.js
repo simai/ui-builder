@@ -13,6 +13,9 @@ const LIFECYCLE_PATH = require.resolve(
 );
 const FACTORY_PATH = require.resolve("../../libs/webpackConfigFactory");
 const PLAN_PATH = require.resolve("../../libs/buildPlan");
+const {
+    createPostcssPlugins,
+} = require("../../libs/postcssPolicy");
 
 const {
     runComponentBuild,
@@ -61,23 +64,15 @@ function componentConfigurationPolicy()
     return {
         devtool: false,
         postcss: {
-            plugins: [[
-                "postcss-preset-env",
-                {
-                    autoprefixer: {
-                        backgroundColor: false,
-                        borderColor: false,
-                        color: false,
-                        position: true,
-                    },
-                    browsers: "last 1 version, >1%",
-                    features: {
-                        "logical-properties-and-values": {
-                            preserve: true,
-                        },
-                    },
+            plugins: createPostcssPlugins({
+                autoprefixer: {
+                    backgroundColor: false,
+                    borderColor: false,
+                    color: false,
+                    position: true,
                 },
-            ]],
+                browsers: "last 1 version, >1%",
+            }),
         },
         resolveExtensions: [".js", ".scss"],
         target: "web",

@@ -1,14 +1,12 @@
 // postcss.config.js
 
 const {
-    createPostcssPresetEnvOptions,
+    createPostcssPlugins,
 } = require("./libs/postcssPolicy");
 
 module.exports = {
-    plugins: {
-        'postcss-preset-env': createPostcssPresetEnvOptions({
+    plugins: createPostcssPlugins({
             browsers: 'last 4 versions',
             autoprefixer: { position: true }
         }),
-    },
 };

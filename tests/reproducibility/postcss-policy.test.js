@@ -7,6 +7,9 @@ const test = require("node:test");
 
 const postcss = require("postcss");
 const postcssPresetEnv = require("postcss-preset-env");
+const lateLogicalFallbacks = require(
+    "../../libs/postcssLateLogicalFallbacks",
+);
 
 const {
     LOGICAL_PROPERTIES_FEATURE,
@@ -55,8 +58,22 @@ async function transform(input)
 {
     return postcss([
         postcssPresetEnv(policyOptions()),
+        lateLogicalFallbacks(),
     ]).process(input, { from: undefined });
 }
+
+const VARIABLE_FIXTURE = [
+    ".variable {",
+    "  border-inline-start-width: var(--border-width, 0);",
+    "  border-inline-end-color: var(--border-color, red);",
+    "  margin-inline-start: var(--margin, 1rem);",
+    "  padding-inline-end: var(--padding, 2rem);",
+    "  inset-inline-end: var(--position, 3rem);",
+    "  color: var(--text-color, blue);",
+    "}",
+    "[dir=\"ltr\"] .intentional { color: red; color: var(--color, red); }",
+    "[dir=\"ltr\"] .intentional { color: green; }",
+].join("\n");
 
 test("logical preservation is mandatory and caller options stay isolated", () => {
     const caller = {
@@ -94,6 +111,14 @@ test("plugin and loader helpers always expose the RTL-safe contract", () => {
     assert.throws(
         () => assertRtlSafePostcssPlugins([["postcss-preset-env", {}]]),
         /must preserve logical-properties-and-values/,
+    );
+    assert.throws(
+        () => assertRtlSafePostcssPlugins([["postcss-preset-env", {
+            features: {
+                [LOGICAL_PROPERTIES_FEATURE]: { preserve: true },
+            },
+        }]]),
+        /must remove late generated logical fallbacks/,
     );
 });
 
@@ -135,6 +160,43 @@ test("normal and compact inputs retain logical declarations after fallbacks", as
     }
 });
 
+test("late generated fallbacks cannot override variable-powered LTR and RTL rules", async () => {
+    const result = await transform(VARIABLE_FIXTURE);
+    const css = result.css;
+
+    for (const [property, fallback, variable] of [
+        ["border-left-width", "0", "--border-width"],
+        ["border-right-width", "0", "--border-width"],
+        ["border-right-color", "red", "--border-color"],
+        ["border-left-color", "red", "--border-color"],
+        ["margin-left", "1rem", "--margin"],
+        ["margin-right", "1rem", "--margin"],
+        ["padding-right", "2rem", "--padding"],
+        ["padding-left", "2rem", "--padding"],
+        ["right", "3rem", "--position"],
+        ["left", "3rem", "--position"],
+    ])
+    {
+        const paired = new RegExp(
+            `${property}:\\s*${fallback};\\s*${property}:\\s*var\\(${variable},\\s*${fallback}\\)`,
+        );
+        const lateFallback = new RegExp(
+            `${property}:\\s*${fallback};?\\s*\\}`,
+            "g",
+        );
+
+        assert.match(css, paired, `${property} must keep fallback before var()`);
+        assert.equal(
+            [...css.matchAll(lateFallback)].length,
+            0,
+            `${property} must not be reset by a later generated fallback`,
+        );
+    }
+
+    assert.match(css, /color:\s*blue;\s*color:\s*var\(--text-color,\s*blue\)/);
+    assert.match(css, /\.intentional\s*\{\s*color:\s*green/);
+});
+
 test("every legacy style carrier delegates to the centralized policy", () => {
     const root = path.resolve(__dirname, "../..");
 
@@ -163,6 +225,6 @@ test("every legacy style carrier delegates to the centralized policy", () => {
         "utf8",
     );
 
-    assert.match(rootConfig, /createPostcssPresetEnvOptions\(/);
+    assert.match(rootConfig, /createPostcssPlugins\(/);
     assert.match(lifecycle, /createPostcssPlugins\(/);
 });
