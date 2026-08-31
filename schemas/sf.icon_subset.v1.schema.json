@@ -1,0 +1,102 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://simai.io/schemas/sf.icon_subset.v1.schema.json",
+  "title": "SIMAI Framework icon subset manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "source",
+    "family",
+    "font_family",
+    "selector",
+    "icons",
+    "axes",
+    "files",
+    "generator",
+    "license",
+    "provenance",
+    "packet_sha256"
+  ],
+  "properties": {
+    "schema": { "const": "sf.icon_subset.v1" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "revision"],
+      "properties": {
+        "sha256": { "$ref": "#/definitions/sha256" },
+        "revision": { "type": ["string", "null"] }
+      }
+    },
+    "family": { "enum": ["outlined", "rounded", "sharp"] },
+    "font_family": { "type": "string", "minLength": 1 },
+    "selector": { "type": "string", "minLength": 1 },
+    "icons": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_]*$" }
+    },
+    "axes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["FILL", "GRAD", "opsz", "wght"],
+      "properties": {
+        "FILL": { "$ref": "#/definitions/numbers" },
+        "GRAD": { "$ref": "#/definitions/numbers" },
+        "opsz": { "$ref": "#/definitions/numbers" },
+        "wght": { "$ref": "#/definitions/numbers" }
+      }
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["css", "font"],
+      "properties": {
+        "css": { "$ref": "#/definitions/file" },
+        "font": {
+          "allOf": [
+            { "$ref": "#/definitions/file" },
+            {
+              "type": "object",
+              "required": ["size"],
+              "properties": { "size": { "type": "integer", "minimum": 1 } }
+            }
+          ]
+        }
+      }
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "revision"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "revision": { "type": ["string", "null"] }
+      }
+    },
+    "license": { "type": "string", "minLength": 1 },
+    "provenance": { "type": ["string", "null"] },
+    "packet_sha256": { "$ref": "#/definitions/sha256" }
+  },
+  "definitions": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "numbers": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "number" }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]+$" },
+        "sha256": { "$ref": "#/definitions/sha256" },
+        "size": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

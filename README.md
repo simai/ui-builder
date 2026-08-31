@@ -132,6 +132,7 @@ that intentionally do not materialize legacy runtime assets.
 - [Architecture and ownership](docs/developer/architecture.md)
 - [Product runner reference](docs/developer/product-runners.md)
 - [Dependency policy](docs/developer/dependency-policy.md)
+- [Icon subset generator](docs/developer/icon-subsets.md)
 - [Migration from the legacy builder](docs/developer/migration-from-sf5-webpack.md)
 - [Contributing](CONTRIBUTING.md)
 

@@ -14,6 +14,7 @@ const SOURCE_ASSET_EXTENSIONS = Object.freeze(new Set([
     ".jpeg",
     ".jpg",
     ".json",
+    ".otf",
     ".png",
     ".svg",
     ".webp",

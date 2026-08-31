@@ -6,6 +6,10 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Added
 
+- A deterministic HarfBuzz WASM icon-subset library and CLI with a
+  content-addressed WOFF2, CSS and `sf.icon_subset.v1` manifest contract.
+- A compatibility adapter that lets `icons.simai.io` retain its `/ms/css` API
+  while using the same generator as production builds.
 - GitHub repository baseline, Node.js and Yarn runtime contract, and GitHub
   Actions workflows.
 - Repository, RTL/PostCSS, and two-wave product reproducibility checks.

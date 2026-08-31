@@ -17,6 +17,7 @@ const INCLUDED_EXTENSIONS = new Set([
 const INCLUDED_FILES = new Set([".env.example"]);
 const EXCLUDED_DIRECTORIES = new Set([
     ".git",
+    ".simai",
     "node_modules",
     "output",
     "source",

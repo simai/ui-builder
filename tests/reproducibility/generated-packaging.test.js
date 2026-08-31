@@ -27,6 +27,8 @@ function fixture()
     const input = writeFile(sourceRoot, "utility/space/default/index.scss", ".space {}\n");
     writeFile(sourceRoot, "utility/space/default/index.js", "");
     writeFile(sourceRoot, "utility/space/default/data.json", "{\"ok\":true}\n");
+    writeFile(sourceRoot, "utility/space/default/fallback.otf", "font-data\n");
+    writeFile(sourceRoot, "utility/space/default/private.ttf", "not distributed\n");
     writeFile(sourceRoot, "utility/space/default/private.md", "not distributed\n");
     writeFile(outputRoot, "utility/space/default/css/default.css", ".space {}\n");
 
@@ -55,6 +57,7 @@ test("generated packaging materializes source assets, empty URL compatibility an
         const result = materializeGeneratedPackaging(subject.plan);
         const css = path.join(subject.outputRoot, "utility/space/default/css/default.css");
         const json = path.join(subject.outputRoot, "utility/space/default/data.json");
+        const font = path.join(subject.outputRoot, "utility/space/default/fallback.otf");
         const compatibility = path.join(subject.outputRoot, "utility/space/default/js/default.js");
         const aggregateCompatibility = path.join(
             subject.outputRoot,
@@ -62,13 +65,15 @@ test("generated packaging materializes source assets, empty URL compatibility an
         );
 
         assert.equal(fs.readFileSync(json, "utf8"), "{\"ok\":true}\n");
+        assert.equal(fs.readFileSync(font, "utf8"), "font-data\n");
         assert.equal(fs.statSync(compatibility).size, 0);
         assert.equal(fs.statSync(aggregateCompatibility).size, 0);
         assert.equal(fs.existsSync(path.join(subject.outputRoot, "utility/space/default/private.md")), false);
+        assert.equal(fs.existsSync(path.join(subject.outputRoot, "utility/space/default/private.ttf")), false);
         assert.deepEqual(zlib.gunzipSync(fs.readFileSync(`${css}.gz`)), fs.readFileSync(css));
         assert.deepEqual(zlib.gunzipSync(fs.readFileSync(`${json}.gz`)), fs.readFileSync(json));
         assert.deepEqual(zlib.gunzipSync(fs.readFileSync(`${compatibility}.gz`)), Buffer.alloc(0));
-        assert.equal(result.sourceAssets.length, 1);
+        assert.equal(result.sourceAssets.length, 2);
         assert.equal(result.compatibilityScripts.length, 2);
         assert.equal(result.gzip.length, 4);
     }
