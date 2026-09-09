@@ -35,6 +35,7 @@ test("frozen runtime invokes npm through the selected Node executable", () => {
 
     assert.match(source, /const command = process\.execPath;/);
     assert.match(source, /spawnSync\(command, \[npmCli,/);
+    assert.match(source, /path\.dirname\(process\.execPath\)/);
     assert.doesNotMatch(source, /spawnSync\((?:"npm"|command), \[\s*"exec"/);
 });
 

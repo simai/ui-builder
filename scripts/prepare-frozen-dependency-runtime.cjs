@@ -136,6 +136,12 @@ if (usage)
         ], {
             cwd: runtimeRoot,
             encoding: "utf8",
+            env: {
+                ...process.env,
+                PATH: [path.dirname(process.execPath), process.env.PATH || ""]
+                    .filter(Boolean)
+                    .join(path.delimiter),
+            },
         });
         const diagnostics = {
             command,
