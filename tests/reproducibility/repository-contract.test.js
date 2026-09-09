@@ -27,6 +27,17 @@ test("repository contract binds the accepted frozen builder runtime", () => {
     assert.equal(report.package_manager, "yarn@1.22.22");
 });
 
+test("frozen runtime invokes npm through the selected Node executable", () => {
+    const source = fs.readFileSync(
+        path.resolve(__dirname, "../../scripts/prepare-frozen-dependency-runtime.cjs"),
+        "utf8",
+    );
+
+    assert.match(source, /const command = process\.execPath;/);
+    assert.match(source, /spawnSync\(command, \[npmCli,/);
+    assert.doesNotMatch(source, /spawnSync\((?:"npm"|command), \[\s*"exec"/);
+});
+
 test("tracked repository text follows the English and SIMAI brand policy", () => {
     const result = run("scripts/verify-english-surface.cjs");
 
