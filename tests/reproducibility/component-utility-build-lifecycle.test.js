@@ -271,6 +271,66 @@ test("Component runner resolves build dependencies from a disposable runtime", (
     }
 });
 
+test("Utility runner fails closed when the source alias contract verifier fails", () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "sf-utility-alias-preflight-"));
+    const builderRoot = path.join(workspace, "builder");
+    const sourceRoot = path.join(workspace, "source", "src");
+    const outputRoot = path.join(workspace, "output");
+    const diagnosticsPath = path.join(workspace, "diagnostics.json");
+
+    writeFile(builderRoot, "package.json", "{}\n");
+    writeFile(
+        builderRoot,
+        "libs/componentBuildLifecycle.js",
+        "exports.runUtilityBuild = async () => { throw new Error('must not build'); };\n",
+    );
+    writeFile(builderRoot, "node_modules/webpack/index.js", "module.exports = () => {};\n");
+    for (const moduleName of [
+        "mini-css-extract-plugin",
+        "terser-webpack-plugin",
+        "webpack-remove-empty-scripts",
+    ])
+    {
+        writeFile(
+            builderRoot,
+            `node_modules/${moduleName}/index.js`,
+            "module.exports = class AdapterStub {};\n",
+        );
+    }
+    writeFile(
+        sourceRoot,
+        "core/contracts/utility-module-aliases.v1.json",
+        "{}\n",
+    );
+    writeFile(
+        path.resolve(sourceRoot, "../scripts"),
+        "verify-utility-module-aliases.mjs",
+        "process.stderr.write('fixture alias mismatch'); process.exit(7);\n",
+    );
+
+    try
+    {
+        const result = runProductRunner([
+            "utility",
+            builderRoot,
+            sourceRoot,
+            outputRoot,
+            diagnosticsPath,
+        ]);
+        assert.equal(result.status, 2, result.stderr);
+        const report = JSON.parse(fs.readFileSync(diagnosticsPath, "utf8"));
+        assert.equal(report.status, 2);
+        assert.equal(report.diagnostics[0].phase, "source-preflight");
+        assert.equal(report.diagnostics[0].code, "UTILITY_ALIAS_CONTRACT_FAILED");
+        assert.match(report.diagnostics[0].message, /fixture alias mismatch/);
+        assert.equal(fs.existsSync(outputRoot), false);
+    }
+    finally
+    {
+        fs.rmSync(workspace, { force: true, recursive: true });
+    }
+});
+
 for (const fixture of [
     {
         entry: "component/button/index.js",

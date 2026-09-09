@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { createRequire } = require("node:module");
+const { spawnSync } = require("node:child_process");
 
 const {
     configureProductConfigurations,
@@ -122,6 +123,53 @@ function entryKeysFromEnvironment(product)
     return manifest.entryKeys;
 }
 
+function runUtilitySourcePreflight(product, sourceRoot, dependencyRoot)
+{
+    if (product !== "utility") return null;
+
+    const contractPath = path.join(
+        sourceRoot,
+        "core/contracts/utility-module-aliases.v1.json",
+    );
+    if (!fs.existsSync(contractPath)) return null;
+
+    const verifierPath = path.resolve(
+        sourceRoot,
+        "../scripts/verify-utility-module-aliases.mjs",
+    );
+    let stat;
+    try
+    {
+        stat = fs.lstatSync(verifierPath);
+    }
+    catch (error)
+    {
+        return {
+            code: "UTILITY_ALIAS_VERIFIER_MISSING",
+            message: error && error.message ? error.message : String(error),
+        };
+    }
+    if (stat.isSymbolicLink() || !stat.isFile())
+    {
+        return {
+            code: "UTILITY_ALIAS_VERIFIER_INVALID",
+            message: "utility alias verifier must be a regular source file",
+        };
+    }
+
+    const result = spawnSync(process.execPath, [verifierPath, dependencyRoot], {
+        cwd: path.resolve(sourceRoot, ".."),
+        encoding: "utf8",
+        env: process.env,
+    });
+    if (result.status === 0) return null;
+
+    return {
+        code: "UTILITY_ALIAS_CONTRACT_FAILED",
+        message: (result.stderr || result.stdout || `exit ${result.status}`).trim(),
+    };
+}
+
 const usage = validatedArguments(process.argv.slice(2));
 
 if (usage)
@@ -216,6 +264,24 @@ if (usage)
     };
 
     const buildOptions = { sourceRoot, outputRoot };
+    const sourcePreflightFailure = runUtilitySourcePreflight(
+        product,
+        sourceRoot,
+        dependencyRoot,
+    );
+    if (sourcePreflightFailure)
+    {
+        diagnostics.push({
+            ...sourcePreflightFailure,
+            phase: "source-preflight",
+        });
+        fs.writeFileSync(
+            diagnosticsPath,
+            `${JSON.stringify({ diagnostics, product, status: 2 }, null, 2)}\n`,
+        );
+        process.exitCode = 2;
+        return;
+    }
     try
     {
         const entryKeys = entryKeysFromEnvironment(product);
