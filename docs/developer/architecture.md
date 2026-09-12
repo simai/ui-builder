@@ -10,7 +10,7 @@
 | Smart distribution | `simai/ui-smart` | Generated output |
 
 Generated repositories are never the source of a fix. A change starts in
-`ui-loader` or `ui-builder`; distributions are updated only through a
+`ui-source` or `ui-builder`; distributions are updated only through a
 reproducible build followed by independent acceptance.
 
 ## Build lifecycle

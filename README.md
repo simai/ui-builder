@@ -69,7 +69,7 @@ SF_SOURCE_DEPENDENCY_ROOT=/absolute/path/to/source-runtime \
 node scripts/run-component-utility-product-build.cjs \
   component \
   /absolute/path/to/ui-builder \
-  /absolute/path/to/ui-loader/src \
+  /absolute/path/to/ui-source/src \
   /absolute/path/to/new-output \
   /absolute/path/to/diagnostics.json
 ```
@@ -86,7 +86,7 @@ products twice:
 
 ```bash
 node scripts/verify-product-reproducibility.cjs \
-  /absolute/path/to/ui-loader \
+  /absolute/path/to/ui-source \
   /absolute/path/to/new-workspace
 ```
 
@@ -106,7 +106,7 @@ export SF_LEGACY_COMPATIBILITY_MANIFEST=/absolute/path/to/lineage.json
 export SF_LEGACY_COMPATIBILITY_REVISION=<manifest-revision-binding>
 
 node scripts/verify-product-reproducibility.cjs \
-  /absolute/path/to/ui-loader \
+  /absolute/path/to/ui-source \
   /absolute/path/to/new-workspace \
   --require-legacy-compatibility
 ```
