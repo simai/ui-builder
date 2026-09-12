@@ -44,7 +44,7 @@ function createPostcssPresetEnvOptions(options = {})
         features: {
             ...features,
             // Ancestor [dir] selectors match both directions in nested contexts.
-            // Keep the native pseudo-class emitted by postcss-logical.
+            // Keep the native pseudo-class; the final policy emits isolated legacy rules.
             "dir-pseudo-class": false,
             [LOGICAL_PROPERTIES_FEATURE]: {
                 ...logicalFeature,

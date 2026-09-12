@@ -131,7 +131,8 @@ test("normal and compact inputs retain logical declarations after fallbacks", as
     {
         const result = await transform(input);
 
-        assert.doesNotMatch(result.css, /\[dir=/);
+        assert.match(result.css, /@supports not \(margin-inline-start: initial\)/);
+        assert.match(result.css, /_:-ms-input-placeholder,/);
         assert.match(result.css, /:dir\(ltr\)/);
         assert.match(result.css, /:dir\(rtl\)/);
         assert.match(result.css, /margin-left:\s*1rem/);
@@ -248,10 +249,36 @@ test("negative calc fallback is retained before var and never repeated later", a
     assert.equal(lateLogicalFallbacks.varFallback("calc(var(--a, 1px) + var(--b))"), null);
     for (const direction of ["ltr", "rtl"])
     {
-        const rules = result.root.nodes.filter(rule => rule.selector === `.negative:dir(${direction})`);
+        const rules = result.root.nodes.filter(rule => rule.selector === `.negative:where(:dir(${direction}))`);
         assert.equal(rules.length, 1);
         assert.deepEqual(rules[0].nodes.map(node => node.value), [
             "calc(-1 * 11px)", "calc(-1 * var(--space, 11px))",
         ]);
     }
+});
+
+
+test("legacy physical rules are available without :dir or @supports", async () => {
+    const result = await transform(FIXTURE);
+    const ie = [];
+    const featureQueries = [];
+    result.root.walkRules(rule => {
+        if (rule.selector.startsWith("_:-ms-input-placeholder,")) ie.push(rule);
+        if (rule.parent.type === "atrule" && rule.parent.name === "supports") featureQueries.push(rule);
+    });
+    assert.equal(ie.length, 8);
+    assert.equal(featureQueries.length, 8);
+    for (const rule of ie)
+    {
+        assert.equal(rule.parent.type, "root", "IE must not depend on @supports");
+        assert.doesNotMatch(rule.selector, /:dir|:where/);
+        assert.ok(rule.nodes.every(node => !node.prop.includes("inline")));
+    }
+    for (const rule of featureQueries)
+    {
+        assert.match(rule.parent.params, /^not \(/);
+        assert.doesNotMatch(rule.selector, /:dir|:where/);
+    }
+    result.root.walkDecls(decl => assert.doesNotMatch(decl.value, /^(initial|unset|revert|revert-layer)$/));
+    assert.match(result.css, /:where\(:dir\(ltr\)\)/);
 });
