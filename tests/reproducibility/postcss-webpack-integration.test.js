@@ -98,8 +98,8 @@ function runCompiler(configurations)
 
 function assertRtlSafeOutput(css, label)
 {
-    assert.match(css, /\[dir="ltr"\]/, label);
-    assert.match(css, /\[dir="rtl"\]/, label);
+    assert.match(css, /:dir\(ltr\)/, label);
+    assert.match(css, /:dir\(rtl\)/, label);
     assert.match(css, /margin-inline-start:\s*var\(--margin,\s*1rem\)/, label);
     assert.match(css, /padding-inline-end:\s*var\(--padding,\s*2rem\)/, label);
     assert.match(css, /inset-inline-end:\s*var\(--position,\s*3rem\)/, label);

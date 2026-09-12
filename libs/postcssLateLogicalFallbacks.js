@@ -1,5 +1,6 @@
 "use strict";
 
+const NATIVE_DIRECTIONAL_SELECTOR = /:dir\((?:ltr|rtl)\)/;
 const DIRECTIONAL_SELECTOR = /^\[dir=(?:["'])?(?:ltr|rtl)(?:["'])?\]\s+/;
 
 function normalizeValue(value)
@@ -10,6 +11,30 @@ function normalizeValue(value)
 function varFallback(value)
 {
     const source = value.trim();
+
+    // Negative spacing wraps var() in calc(); compare its generated constant
+    // expression without evaluating CSS arithmetic or changing the var() rule.
+    if (source.startsWith("calc(") && source.endsWith(")"))
+    {
+        const start = source.indexOf("var(");
+        let depth = 0;
+
+        for (let index = start + 3; start >= 0 && index < source.length; index += 1)
+        {
+            if (source[index] === "(") depth += 1;
+            if (source[index] === ")") depth -= 1;
+            if (depth !== 0) continue;
+
+            const fallback = varFallback(source.slice(start, index + 1));
+            const expression = fallback === null ? null
+                : source.slice(0, start) + fallback + source.slice(index + 1);
+
+            return expression === null || expression.includes("var(")
+                ? null : normalizeValue(expression);
+        }
+
+        return null;
+    }
 
     if (!source.startsWith("var("))
     {
@@ -126,7 +151,8 @@ function createLateLogicalFallbackCleanup()
                     return;
                 }
 
-                if (!DIRECTIONAL_SELECTOR.test(selector)
+                if ((!DIRECTIONAL_SELECTOR.test(selector)
+                    && !NATIVE_DIRECTIONAL_SELECTOR.test(selector))
                     || declarations.length !== 1
                     || rule.nodes.length !== 1)
                 {

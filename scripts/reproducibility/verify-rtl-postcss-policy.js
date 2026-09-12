@@ -36,8 +36,8 @@ function sha256(value)
 function checkOutput(css)
 {
     const checks = {
-        directionFallbacks: /\[dir="ltr"\]/.test(css)
-            && /\[dir="rtl"\]/.test(css),
+        directionFallbacks: /:dir\(ltr\)/.test(css)
+            && /:dir\(rtl\)/.test(css),
         logicalRetained: true,
         logicalAfterFallbacks: true,
         noLateFallbackOverride: true,
