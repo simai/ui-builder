@@ -11,6 +11,16 @@ function normalizeValue(value)
     return value.trim().replace(/\s+/g, " ");
 }
 
+function normalizeSelectorLineEnds(selector)
+{
+    // postcss-dir-pseudo-class can preserve indentation before a newline when
+    // it prefixes every member of a multiline selector list. The newline is
+    // already the descendant combinator, so horizontal whitespace before it
+    // is redundant and makes generated repository diffs fail whitespace
+    // checks.
+    return selector.replace(/[ \t]+(?=\r?\n|$)/g, "");
+}
+
 function varFallback(value)
 {
     const source = value.trim();
@@ -172,6 +182,7 @@ function addLegacyFallbacks(root, result)
             const fallback = rule.clone({ nodes: declarations.map(node => node.clone()) });
             // Reuse the existing preset dependency; never implement another selector converter.
             legacyDirection.Rule(fallback, { result });
+            fallback.selector = normalizeSelectorLineEnds(fallback.selector);
             // IE 10/11 has no @supports. This recognized IE pseudo-class makes the
             // whole selector list invalid elsewhere, keeping it out of modern cascades.
             rule.before(fallback.clone({ selector: `_:-ms-input-placeholder, ${fallback.selector}` }));

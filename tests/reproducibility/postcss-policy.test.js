@@ -282,3 +282,16 @@ test("legacy physical rules are available without :dir or @supports", async () =
     result.root.walkDecls(decl => assert.doesNotMatch(decl.value, /^(initial|unset|revert|revert-layer)$/));
     assert.match(result.css, /:where\(:dir\(ltr\)\)/);
 });
+
+test("multiline legacy selector lists have clean line endings", async () => {
+    const result = await transform([
+        ".group:dir(ltr) .first,",
+        ".group:dir(ltr) .second { margin-left: 1rem; margin-inline-start: 1rem; }",
+    ].join("\n"));
+
+    assert.doesNotMatch(result.css, /[ \t]+(?:\r?\n|$)/);
+    assert.match(
+        result.css,
+        /html:not\(\[dir="rtl"\]\) \.group \.first,html:not\(\[dir="rtl"\]\)\n\.group \.second/,
+    );
+});
