@@ -4,7 +4,7 @@
 
 | Layer | Repository | Responsibility |
 | --- | --- | --- |
-| Framework source | `simai/ui-loader` | Canonical SCSS, JavaScript, templates, and metadata for Core, Component, Utility, and Smart |
+| Framework source | `simai/ui-source` | Canonical SCSS, JavaScript, templates, and metadata for Core, Component, Utility, and Smart |
 | Build system | `simai/ui-builder` | Build planning, Webpack configuration, deterministic lifecycle, diagnostics, and packaging |
 | Core and Component distribution | `simai/ui` | Generated output |
 | Smart distribution | `simai/ui-smart` | Generated output |

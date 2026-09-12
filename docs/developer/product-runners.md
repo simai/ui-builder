@@ -9,7 +9,7 @@ automation and reproducibility checks.
 Every path argument must be absolute:
 
 1. `builderRoot`: the `ui-builder` checkout;
-2. `sourceRoot`: the `src` directory of an exact `ui-loader` checkout;
+2. `sourceRoot`: the `src` directory of an exact `ui-source` checkout;
 3. `outputRoot`: a path that does not exist before the run;
 4. `diagnosticsPath`: the JSON diagnostics file to create.
 

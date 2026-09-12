@@ -5,7 +5,7 @@ Utility, and Smart layers of [SIMAI Framework](https://github.com/simai).
 
 The repository owns build planning, Webpack configuration, deterministic module
 and chunk identifiers, asset packaging, and reproducibility verification. The
-framework source remains in `simai/ui-loader`; `simai/ui` and `simai/ui-smart`
+framework source remains in `simai/ui-source`; `simai/ui` and `simai/ui-smart`
 are generated distributions and must not be edited as source code.
 
 ## Requirements
@@ -121,8 +121,8 @@ that intentionally do not materialize legacy runtime assets.
 - **CI** performs a frozen install and runs `yarn run verify` on pushes and pull
   requests.
 - **Product reproducibility** is a manually dispatched workflow that accepts an
-  exact `ui-loader` branch, tag, or commit and stores both build waves as an
-  artifact. A private `simai/ui-loader` checkout requires the
+  exact `ui-source` branch, tag, or commit and stores both build waves as an
+  artifact. A private `simai/ui-source` checkout requires the
   `UI_LOADER_READ_TOKEN` repository secret with read-only Contents access.
 
 ## Documentation

@@ -15,7 +15,7 @@ English is the project language. Use English for:
 The brand name is always written as `SIMAI`; mixed-case variants are incorrect.
 Lowercase `simai` is used only when it is part of a technical identifier,
 package scope, repository path, or URL, such as `@simai/ui-builder` and
-`simai/ui-loader`.
+`simai/ui-source`.
 
 Technical identifiers, external product names, and historical repository names
 may remain unchanged when translation would reduce accuracy or traceability.
@@ -24,7 +24,7 @@ may remain unchanged when translation would reduce accuracy or traceability.
 
 Identify the ownership boundary first:
 
-- framework SCSS, JavaScript, and templates belong in `simai/ui-loader`;
+- framework SCSS, JavaScript, and templates belong in `simai/ui-source`;
 - build planning, Webpack configuration, lifecycle, and packaging belong here;
 - `simai/ui` and `simai/ui-smart` are generated distributions and are not
   source repositories.

@@ -51,7 +51,7 @@ Every dependency update is a separate candidate and must:
 1. update the dependency specification and lockfile on an isolated branch;
 2. pass `yarn run verify` on the required Node.js version;
 3. run two frozen Core, Component, Utility, and Smart build waves against an
-   exact `ui-loader` revision;
+   exact `ui-source` revision;
 4. classify every generated-output difference;
 5. demonstrate the expected logical CSS retention and fallback order;
 6. receive independent acceptance for the exact commit and Git tree;
