@@ -24,6 +24,8 @@ const DECLARATIONS = [
         "border-left-width",
         "border-right-width",
     ],
+    ["border-start-start-radius", "--corner", "var(--surface-radius)", "border-top-left-radius", "border-top-right-radius"],
+    ["border-end-end-radius", "--corner", "var(--component-radius, var(--ui-radius))", "border-bottom-right-radius", "border-bottom-left-radius"],
 ];
 const INPUT = `.fixture { ${DECLARATIONS.map(([property, variable, fallback]) =>
     `${property}: var(${variable}, ${fallback})`).join("; ")}; }`;
@@ -52,15 +54,22 @@ function checkOutput(css)
         rtlProperty,
     ] of DECLARATIONS)
     {
-        const value = `var\\(${variable},\\s*${fallback}\\)`;
+        const escapedFallback = fallback.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s*");
+        let terminalFallback = fallback;
+        while (lateLogicalFallbacks.varFallback(terminalFallback) !== null)
+        {
+            terminalFallback = lateLogicalFallbacks.varFallback(terminalFallback);
+        }
+        const escapedTerminal = terminalFallback.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const value = `var\\(${variable},\\s*${escapedFallback}\\)`;
         const logicalIndex = css.search(new RegExp(`${logical}:\\s*${value}`));
         const ltrIndex = css.search(new RegExp(`${ltrProperty}:\\s*${value}`));
         const rtlIndex = css.search(new RegExp(`${rtlProperty}:\\s*${value}`));
         const lateLtr = new RegExp(
-            `${ltrProperty}:\\s*${fallback};?\\s*\\}`,
+            `${ltrProperty}:\\s*${escapedTerminal};?\\s*\\}`,
         );
         const lateRtl = new RegExp(
-            `${rtlProperty}:\\s*${fallback};?\\s*\\}`,
+            `${rtlProperty}:\\s*${escapedTerminal};?\\s*\\}`,
         );
 
         checks.logicalRetained &&= logicalIndex >= 0;

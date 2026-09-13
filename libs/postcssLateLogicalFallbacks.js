@@ -61,15 +61,23 @@ function protectedFallbacks(rule)
         const fallback = declarations[index];
         const variable = declarations[index + 1];
 
-        if (fallback.prop !== variable.prop || fallback.value.includes("var("))
+        if (fallback.prop !== variable.prop)
         {
             continue;
         }
 
-        const expectedFallback = varFallback(variable.value);
+        const fallbackValue = normalizeValue(fallback.value);
+        let expectedFallback = varFallback(variable.value);
+
+        // preset-env can collapse several alias levels to a semantic token.
+        // That token is still only a fallback, not a later author override.
+        while (expectedFallback !== null && expectedFallback !== fallbackValue)
+        {
+            expectedFallback = varFallback(expectedFallback);
+        }
 
         if (expectedFallback === null
-            || normalizeValue(fallback.value) !== expectedFallback)
+            || fallbackValue !== expectedFallback)
         {
             continue;
         }
@@ -107,9 +115,14 @@ function createLateLogicalFallbackCleanup()
         postcssPlugin: "simai-late-logical-fallback-cleanup",
         OnceExit(root)
         {
-            const protectedBySelector = new Map();
+            const protectedByParent = new WeakMap();
 
             root.walkRules(rule => {
+                if (!protectedByParent.has(rule.parent))
+                {
+                    protectedByParent.set(rule.parent, new Map());
+                }
+                const protectedBySelector = protectedByParent.get(rule.parent);
                 const selector = rule.selector;
                 const declarations = declarationNodes(rule);
                 const pairs = protectedFallbacks(rule);

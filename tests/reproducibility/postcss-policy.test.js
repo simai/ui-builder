@@ -228,3 +228,33 @@ test("every legacy style carrier delegates to the centralized policy", () => {
     assert.match(rootConfig, /createPostcssPlugins\(/);
     assert.match(lifecycle, /createPostcssPlugins\(/);
 });
+
+test("semantic and nested variable fallbacks cannot override the component alias", async () => {
+    for (const value of [
+        "var(--corner, var(--surface-radius))",
+        "var(--corner, var(--component-radius, var(--ui-radius)))",
+    ])
+    {
+        const result = await transform(`.fixture { border-start-start-radius: ${value}; }`);
+        for (const property of ["border-top-left-radius", "border-top-right-radius"])
+        {
+            const rules = [];
+            result.root.walkRules(rule => {
+                if (!rule.selector.startsWith("[dir=")) return;
+                const declarations = rule.nodes.filter(node => node.type === "decl" && node.prop === property);
+                if (declarations.length) rules.push(declarations);
+            });
+            assert.ok(rules.length > 0);
+            assert.equal(rules.at(-1).at(-1).value, value);
+        }
+    }
+});
+
+test("late fallback cleanup does not cross media or layer boundaries", async () => {
+    const input = '[dir="ltr"] .fixture { border-top-left-radius: 4px; border-top-left-radius: var(--corner, 4px); }\n'
+        + '@media (width < 500px) { [dir="ltr"] .fixture { border-top-left-radius: 4px; } }\n'
+        + '@layer overrides { [dir="ltr"] .fixture { border-top-left-radius: 4px; } }';
+    const result = await postcss([lateLogicalFallbacks()]).process(input, {from: undefined});
+    assert.match(result.css, /@media[^}]+border-top-left-radius: 4px/);
+    assert.match(result.css, /@layer[^}]+border-top-left-radius: 4px/);
+});
