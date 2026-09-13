@@ -307,7 +307,7 @@ test("semantic and nested variable fallbacks cannot override the component alias
         {
             const rules = [];
             result.root.walkRules(rule => {
-                if (!rule.selector.startsWith("[dir=")) return;
+                if (!rule.selector.includes(":dir(")) return;
                 const declarations = rule.nodes.filter(node => node.type === "decl" && node.prop === property);
                 if (declarations.length) rules.push(declarations);
             });
