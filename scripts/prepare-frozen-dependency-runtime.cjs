@@ -11,6 +11,25 @@ const ARGUMENT_NAMES = Object.freeze([
 ]);
 const YARN_VERSION = "1.22.22";
 
+function resolveNpmCli()
+{
+    const explicit = process.env.npm_execpath;
+    if (explicit && path.isAbsolute(explicit) && fs.existsSync(explicit))
+    {
+        return fs.realpathSync(explicit);
+    }
+
+    const executableName = process.platform === "win32" ? "npm.cmd" : "npm";
+    for (const directory of (process.env.PATH || "").split(path.delimiter))
+    {
+        if (!directory) continue;
+        const candidate = path.join(directory, executableName);
+        if (fs.existsSync(candidate)) return fs.realpathSync(candidate);
+    }
+
+    throw new Error("npm CLI could not be resolved from npm_execpath or PATH");
+}
+
 function fail(code, message, details)
 {
     process.stderr.write(`${JSON.stringify({
@@ -89,8 +108,22 @@ if (usage)
         fs.copyFileSync(packagePath, path.join(runtimeRoot, "package.json"));
         fs.copyFileSync(lockPath, path.join(runtimeRoot, "yarn.lock"));
 
-        const command = process.platform === "win32" ? "npm.cmd" : "npm";
-        const result = spawnSync(command, [
+        let npmCli;
+        try
+        {
+            npmCli = resolveNpmCli();
+        }
+        catch (error)
+        {
+            fail(
+                "NPM_CLI_MISSING",
+                error && error.message ? error.message : String(error),
+                {},
+            );
+            return;
+        }
+        const command = process.execPath;
+        const result = spawnSync(command, [npmCli,
             "exec",
             "--yes",
             `--package=yarn@${YARN_VERSION}`,
@@ -103,9 +136,16 @@ if (usage)
         ], {
             cwd: runtimeRoot,
             encoding: "utf8",
+            env: {
+                ...process.env,
+                PATH: [path.dirname(process.execPath), process.env.PATH || ""]
+                    .filter(Boolean)
+                    .join(path.delimiter),
+            },
         });
         const diagnostics = {
             command,
+            npmCli,
             lockfile: "yarn.lock",
             runtimeRoot,
             schemaVersion: 1,

@@ -85,6 +85,7 @@ test("logical preservation is mandatory and caller options stay isolated", () =>
                 preserve: false,
             },
             "nesting-rules": false,
+            "dir-pseudo-class": { preserve: false },
         },
     };
     const options = createPostcssPresetEnvOptions(caller);
@@ -94,6 +95,8 @@ test("logical preservation is mandatory and caller options stay isolated", () =>
         true,
     );
     assert.equal(options.features["nesting-rules"], false);
+    assert.equal(options.features["dir-pseudo-class"], false);
+    assert.deepEqual(caller.features["dir-pseudo-class"], { preserve: false });
     assert.notEqual(options, caller);
     assert.notEqual(options.autoprefixer, caller.autoprefixer);
     assert.notEqual(options.features, caller.features);
@@ -116,6 +119,7 @@ test("plugin and loader helpers always expose the RTL-safe contract", () => {
         () => assertRtlSafePostcssPlugins([["postcss-preset-env", {
             features: {
                 [LOGICAL_PROPERTIES_FEATURE]: { preserve: true },
+                "dir-pseudo-class": false,
             },
         }]]),
         /must remove late generated logical fallbacks/,
@@ -127,8 +131,10 @@ test("normal and compact inputs retain logical declarations after fallbacks", as
     {
         const result = await transform(input);
 
-        assert.match(result.css, /\[dir="ltr"\]/);
-        assert.match(result.css, /\[dir="rtl"\]/);
+        assert.match(result.css, /@supports not \(margin-inline-start: initial\)/);
+        assert.match(result.css, /_:-ms-input-placeholder,/);
+        assert.match(result.css, /:dir\(ltr\)/);
+        assert.match(result.css, /:dir\(rtl\)/);
         assert.match(result.css, /margin-left:\s*1rem/);
         assert.match(result.css, /margin-right:\s*1rem/);
         assert.match(result.css, /padding-right:\s*2rem/);
@@ -227,6 +233,67 @@ test("every legacy style carrier delegates to the centralized policy", () => {
 
     assert.match(rootConfig, /createPostcssPlugins\(/);
     assert.match(lifecycle, /createPostcssPlugins\(/);
+});
+
+
+test("native direction cannot be disabled by an unsafe plugin tuple", () => {
+    const plugins = createPostcssPlugins();
+    delete plugins[0][1].features["dir-pseudo-class"];
+    assert.throws(() => assertRtlSafePostcssPlugins(plugins), /native :dir/);
+});
+
+test("negative calc fallback is retained before var and never repeated later", async () => {
+    const result = await transform(".negative { margin-inline-start: calc(-1 * var(--space, 11px)); }");
+    assert.equal(lateLogicalFallbacks.varFallback("calc(-1 * var(--space, 11px))"), "calc(-1 * 11px)");
+    assert.equal(lateLogicalFallbacks.varFallback("calc(-1 * var(--space))"), null);
+    assert.equal(lateLogicalFallbacks.varFallback("calc(var(--a, 1px) + var(--b))"), null);
+    for (const direction of ["ltr", "rtl"])
+    {
+        const rules = result.root.nodes.filter(rule => rule.selector === `.negative:where(:dir(${direction}))`);
+        assert.equal(rules.length, 1);
+        assert.deepEqual(rules[0].nodes.map(node => node.value), [
+            "calc(-1 * 11px)", "calc(-1 * var(--space, 11px))",
+        ]);
+    }
+});
+
+
+test("legacy physical rules are available without :dir or @supports", async () => {
+    const result = await transform(FIXTURE);
+    const ie = [];
+    const featureQueries = [];
+    result.root.walkRules(rule => {
+        if (rule.selector.startsWith("_:-ms-input-placeholder,")) ie.push(rule);
+        if (rule.parent.type === "atrule" && rule.parent.name === "supports") featureQueries.push(rule);
+    });
+    assert.equal(ie.length, 8);
+    assert.equal(featureQueries.length, 8);
+    for (const rule of ie)
+    {
+        assert.equal(rule.parent.type, "root", "IE must not depend on @supports");
+        assert.doesNotMatch(rule.selector, /:dir|:where/);
+        assert.ok(rule.nodes.every(node => !node.prop.includes("inline")));
+    }
+    for (const rule of featureQueries)
+    {
+        assert.match(rule.parent.params, /^not \(/);
+        assert.doesNotMatch(rule.selector, /:dir|:where/);
+    }
+    result.root.walkDecls(decl => assert.doesNotMatch(decl.value, /^(initial|unset|revert|revert-layer)$/));
+    assert.match(result.css, /:where\(:dir\(ltr\)\)/);
+});
+
+test("multiline legacy selector lists have clean line endings", async () => {
+    const result = await transform([
+        ".group:dir(ltr) .first,",
+        ".group:dir(ltr) .second { margin-left: 1rem; margin-inline-start: 1rem; }",
+    ].join("\n"));
+
+    assert.doesNotMatch(result.css, /[ \t]+(?:\r?\n|$)/);
+    assert.match(
+        result.css,
+        /html:not\(\[dir="rtl"\]\) \.group \.first,html:not\(\[dir="rtl"\]\)\n\.group \.second/,
+    );
 });
 
 test("semantic and nested variable fallbacks cannot override the component alias", async () => {

@@ -38,8 +38,11 @@ function sha256(value)
 function checkOutput(css)
 {
     const checks = {
-        directionFallbacks: /\[dir="ltr"\]/.test(css)
-            && /\[dir="rtl"\]/.test(css),
+        directionFallbacks: /:dir\(ltr\)/.test(css)
+            && /:dir\(rtl\)/.test(css),
+        legacyFallbacks: /_:-ms-input-placeholder,/.test(css)
+            && /@supports not \(margin-inline-start: initial\)/.test(css),
+        modernSpecificity: /:where\(:dir\(ltr\)\)/.test(css),
         logicalRetained: true,
         logicalAfterFallbacks: true,
         noLateFallbackOverride: true,

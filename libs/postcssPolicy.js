@@ -43,6 +43,9 @@ function createPostcssPresetEnvOptions(options = {})
         ...cloned,
         features: {
             ...features,
+            // Ancestor [dir] selectors match both directions in nested contexts.
+            // Keep the native pseudo-class; the final policy emits isolated legacy rules.
+            "dir-pseudo-class": false,
             [LOGICAL_PROPERTIES_FEATURE]: {
                 ...logicalFeature,
                 preserve: true,
@@ -92,6 +95,11 @@ function assertRtlSafePostcssPlugins(plugins, label = "postcss plugins")
         throw new TypeError(
             `${label} must preserve ${LOGICAL_PROPERTIES_FEATURE}`,
         );
+    }
+
+    if (preset[1].features["dir-pseudo-class"] !== false)
+    {
+        throw new TypeError(`${label} must preserve native :dir() selectors`);
     }
 
     const cleanup = plugins.find(plugin =>
