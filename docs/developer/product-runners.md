@@ -33,7 +33,7 @@ two-wave verifier performs this step automatically.
 ```bash
 node scripts/run-core-product-build.cjs \
   /absolute/path/to/ui-builder \
-  /absolute/path/to/ui-loader/src \
+  /absolute/path/to/ui-source/src \
   /absolute/path/to/new-core-output \
   /absolute/path/to/core-diagnostics.json
 ```
@@ -46,7 +46,7 @@ The first argument must be `component` or `utility`:
 node scripts/run-component-utility-product-build.cjs \
   component \
   /absolute/path/to/ui-builder \
-  /absolute/path/to/ui-loader/src \
+  /absolute/path/to/ui-source/src \
   /absolute/path/to/new-component-output \
   /absolute/path/to/component-diagnostics.json
 ```
@@ -72,7 +72,7 @@ byte-identical.
 ```bash
 node scripts/run-smart-product-build.cjs \
   /absolute/path/to/ui-builder \
-  /absolute/path/to/ui-loader/src \
+  /absolute/path/to/ui-source/src \
   /absolute/path/to/new-smart-output \
   /absolute/path/to/smart-diagnostics.json
 ```

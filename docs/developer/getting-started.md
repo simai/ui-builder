@@ -52,11 +52,11 @@ runtime variables instead of this legacy configuration.
 
 ## Run a deterministic product check
 
-Use a clean `ui-loader` checkout and a workspace path that does not yet exist:
+Use a clean `ui-source` checkout and a workspace path that does not yet exist:
 
 ```bash
 node scripts/verify-product-reproducibility.cjs \
-  /absolute/path/to/ui-loader \
+  /absolute/path/to/ui-source \
   /absolute/path/to/new-workspace
 ```
 
