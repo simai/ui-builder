@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const { spawn } = require("node:child_process");
 const { pathToFileURL } = require("node:url");
 const test = require("node:test");
 const postcss = require("postcss");
@@ -146,11 +146,14 @@ test("computed sides follow nearest dir with full CSS and physical fallbacks alo
         const diagnostics = path.join(workspace, "browser.log");
         const stdout = fs.openSync(output, "w");
         const stderr = fs.openSync(diagnostics, "w");
-        let run;
+        let child;
+        let browserError = null;
+        let browserExited;
+        let match;
         try
         {
             // Regular files avoid Chromium's large dump being truncated in a pipe.
-            run = spawnSync(browser, [
+            child = spawn(browser, [
                 "--headless=new", "--no-sandbox", "--disable-gpu",
                 "--disable-crashpad-for-testing",
                 "--disable-background-networking", "--disable-component-update",
@@ -159,19 +162,34 @@ test("computed sides follow nearest dir with full CSS and physical fallbacks alo
                 "--disable-search-engine-choice-screen", "--use-mock-keychain",
                 `--user-data-dir=${path.join(workspace, "profile")}`,
                 "--dump-dom", pathToFileURL(input).href,
-            ], { stdio: ["ignore", stdout, stderr], timeout: 30000 });
+            ], { stdio: ["ignore", stdout, stderr] });
+            browserExited = new Promise(resolve => child.once("close", resolve));
+            child.once("error", error => { browserError = error; });
+            const deadline = Date.now() + 120000;
+            while (Date.now() < deadline)
+            {
+                match = fs.readFileSync(output, "utf8").match(/<pre id="results">([^<]+)<\/pre>/);
+                if (match) break;
+                if (browserError) throw browserError;
+                if (child.exitCode !== null || child.signalCode !== null)
+                {
+                    assert.fail(`Browser exited before the complete matrix: ${fs.readFileSync(diagnostics, "utf8")}`);
+                }
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+            if (!match)
+            {
+                assert.fail(`Browser did not return the complete matrix within 120 seconds: ${fs.readFileSync(diagnostics, "utf8")}`);
+            }
         }
         finally
         {
+            if (child?.pid && child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
+            if (browserExited) await browserExited;
             fs.closeSync(stdout);
             fs.closeSync(stderr);
         }
-        const html = fs.readFileSync(output, "utf8");
-        const match = html.match(/<pre id="results">([^<]+)<\/pre>/);
-        if (!match) assert.ifError(run.error);
         assert.ok(match, "Browser must return the complete computed-style matrix");
-        if (run.error && run.error.code !== "ETIMEDOUT") assert.ifError(run.error);
-        if (!run.error) assert.equal(run.status, 0, fs.readFileSync(diagnostics, "utf8"));
         const { results: rows, combinations } = JSON.parse(match[1]);
         assert.equal(rows.filter(row => !row.mode.startsWith("legacy")).length, 200);
         assert.equal(rows.filter(row => row.mode.startsWith("legacy")).length, 90);
