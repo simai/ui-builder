@@ -27,7 +27,6 @@ function fixture()
     const input = writeFile(sourceRoot, "utility/space/default/index.scss", ".space {}\n");
     writeFile(sourceRoot, "utility/space/default/index.js", "");
     writeFile(sourceRoot, "utility/space/default/data.json", "{\"ok\":true}\n");
-    writeFile(sourceRoot, "utility/space/default/runtime.mjs", "export const ok = true;\n");
     writeFile(sourceRoot, "utility/space/default/fallback.otf", "font-data\n");
     writeFile(sourceRoot, "utility/space/default/private.ttf", "not distributed\n");
     writeFile(sourceRoot, "utility/space/default/private.md", "not distributed\n");
@@ -59,7 +58,6 @@ test("generated packaging materializes source assets, empty URL compatibility an
         const css = path.join(subject.outputRoot, "utility/space/default/css/default.css");
         const json = path.join(subject.outputRoot, "utility/space/default/data.json");
         const font = path.join(subject.outputRoot, "utility/space/default/fallback.otf");
-        const runtime = path.join(subject.outputRoot, "utility/space/default/runtime.mjs");
         const compatibility = path.join(subject.outputRoot, "utility/space/default/js/default.js");
         const aggregateCompatibility = path.join(
             subject.outputRoot,
@@ -68,22 +66,50 @@ test("generated packaging materializes source assets, empty URL compatibility an
 
         assert.equal(fs.readFileSync(json, "utf8"), "{\"ok\":true}\n");
         assert.equal(fs.readFileSync(font, "utf8"), "font-data\n");
-        assert.equal(fs.readFileSync(runtime, "utf8"), "export const ok = true;\n");
         assert.equal(fs.statSync(compatibility).size, 0);
         assert.equal(fs.statSync(aggregateCompatibility).size, 0);
         assert.equal(fs.existsSync(path.join(subject.outputRoot, "utility/space/default/private.md")), false);
         assert.equal(fs.existsSync(path.join(subject.outputRoot, "utility/space/default/private.ttf")), false);
         assert.deepEqual(zlib.gunzipSync(fs.readFileSync(`${css}.gz`)), fs.readFileSync(css));
         assert.deepEqual(zlib.gunzipSync(fs.readFileSync(`${json}.gz`)), fs.readFileSync(json));
-        assert.deepEqual(zlib.gunzipSync(fs.readFileSync(`${runtime}.gz`)), fs.readFileSync(runtime));
         assert.deepEqual(zlib.gunzipSync(fs.readFileSync(`${compatibility}.gz`)), Buffer.alloc(0));
-        assert.equal(result.sourceAssets.length, 3);
+        assert.equal(result.sourceAssets.length, 2);
         assert.equal(result.compatibilityScripts.length, 2);
-        assert.equal(result.gzip.length, 5);
+        assert.equal(result.gzip.length, 4);
     }
     finally
     {
         fs.rmSync(subject.workspace, { force: true, recursive: true });
+    }
+});
+
+test("Core packaging publishes only the Composition ESM runtime", () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "sf-composition-packaging-"));
+    const sourceRoot = path.join(workspace, "source");
+    const outputRoot = path.join(workspace, "output");
+    const input = writeFile(sourceRoot, "core/js/index.js", "export {};\n");
+    writeFile(sourceRoot, "core/js/composition/index.mjs", "export const Composition = {};\n");
+    writeFile(sourceRoot, "core/contracts/checks/private.mjs", "throw new Error('not public');\n");
+    fs.mkdirSync(outputRoot, { recursive: true });
+    writeFile(outputRoot, ".compat/utility-full/css/utility.full.css", "");
+
+    try
+    {
+        const result = materializeGeneratedPackaging({
+            entries: [{ input, key: "core", outputDirectory: path.join(outputRoot, "core"), target: "core" }],
+            outputRoot,
+            sourceRoot,
+        });
+        const runtime = path.join(outputRoot, "core/js/composition/index.mjs");
+
+        assert.equal(fs.readFileSync(runtime, "utf8"), "export const Composition = {};\n");
+        assert.deepEqual(zlib.gunzipSync(fs.readFileSync(`${runtime}.gz`)), fs.readFileSync(runtime));
+        assert.equal(fs.existsSync(path.join(outputRoot, "core/contracts/checks/private.mjs")), false);
+        assert.deepEqual(result.sourceAssets, [runtime]);
+    }
+    finally
+    {
+        fs.rmSync(workspace, { force: true, recursive: true });
     }
 });
 

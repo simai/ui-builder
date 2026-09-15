@@ -14,7 +14,6 @@ const SOURCE_ASSET_EXTENSIONS = Object.freeze(new Set([
     ".jpeg",
     ".jpg",
     ".json",
-    ".mjs",
     ".otf",
     ".png",
     ".svg",
@@ -124,11 +123,6 @@ function materializeSourceAssets(plan)
 
         for (const source of walkRegularFiles(entryDirectory, "source asset tree"))
         {
-            if (!SOURCE_ASSET_EXTENSIONS.has(path.extname(source).toLowerCase()))
-            {
-                continue;
-            }
-
             const canonicalSource = fs.realpathSync(source);
 
             if (!isWithin(sourceRoot, canonicalSource))
@@ -137,6 +131,16 @@ function materializeSourceAssets(plan)
             }
 
             const relativePath = path.relative(sourceRoot, canonicalSource);
+            const extension = path.extname(canonicalSource).toLowerCase();
+            const portableRelativePath = relativePath.split(path.sep).join("/");
+
+            if (!SOURCE_ASSET_EXTENSIONS.has(extension)
+                && !(extension === ".mjs"
+                    && /^core\/js\/composition\/[A-Za-z0-9._-]+\.mjs$/u.test(portableRelativePath)))
+            {
+                continue;
+            }
+
             const destination = safeDestination(outputRoot, relativePath, "source asset");
             fs.mkdirSync(path.dirname(destination), { recursive: true });
 
