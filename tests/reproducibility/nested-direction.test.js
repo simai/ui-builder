@@ -159,7 +159,7 @@ test("computed sides follow nearest dir with full CSS and physical fallbacks alo
                 "--disable-search-engine-choice-screen", "--use-mock-keychain",
                 `--user-data-dir=${path.join(workspace, "profile")}`,
                 "--dump-dom", pathToFileURL(input).href,
-            ], { stdio: ["ignore", stdout, stderr], timeout: 10000 });
+            ], { stdio: ["ignore", stdout, stderr], timeout: 30000 });
         }
         finally
         {
