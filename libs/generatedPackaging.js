@@ -14,6 +14,7 @@ const SOURCE_ASSET_EXTENSIONS = Object.freeze(new Set([
     ".jpeg",
     ".jpg",
     ".json",
+    ".mjs",
     ".otf",
     ".png",
     ".svg",
@@ -26,10 +27,12 @@ const GZIP_EXTENSIONS = Object.freeze(new Set([
     ".html",
     ".js",
     ".json",
+    ".mjs",
     ".svg",
 ]));
 const NORMALIZED_TEXT_EXTENSIONS = Object.freeze(new Set([
     ".js",
+    ".mjs",
 ]));
 
 function compareCodeUnits(left, right)
