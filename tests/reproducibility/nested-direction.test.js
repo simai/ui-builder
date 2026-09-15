@@ -15,9 +15,9 @@ const { createPostcssPresetEnvOptions } = require("../../libs/postcssPolicy");
 // No browser dependency is added to the builder. CI can set SF_TEST_BROWSER.
 const browser = process.env.SF_TEST_BROWSER || [
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/usr/bin/google-chrome",
     "/usr/bin/chromium",
     "/usr/bin/chromium-browser",
-    "/usr/bin/google-chrome",
 ].find(candidate => fs.existsSync(candidate));
 
 const INPUT = `
