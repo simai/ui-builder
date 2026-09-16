@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const zlib = require("node:zlib");
+const crypto = require("node:crypto");
 const {
     materializeLegacyRuntimeCompatibility,
 } = require("./legacyRuntimeCompatibility");
@@ -116,6 +117,49 @@ function materializeSourceAssets(plan)
     const sourceRoot = assertRegularTree(plan.sourceRoot, "sourceRoot");
     const outputRoot = path.resolve(plan.outputRoot);
     const copied = [];
+    const normativeAssets = new Set();
+    const contractRoot = path.join(sourceRoot, "core/contracts/composition-recipe-v1");
+    const lockPath = path.join(contractRoot, "contract.lock.json");
+
+    if (plan.entries.some((entry) => entry.target === "core") && fs.existsSync(lockPath))
+    {
+        const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+
+        if (lock.schema !== "simai.composition.recipe-contract-lock.v1"
+            || !lock.normativeFiles || typeof lock.normativeFiles !== "object"
+            || Array.isArray(lock.normativeFiles))
+        {
+            throw new Error("invalid Recipe normative-file lock");
+        }
+
+        for (const [relative, expected] of Object.entries(lock.normativeFiles))
+        {
+            if (!relative || relative.includes("\\") || path.isAbsolute(relative)
+                || relative.split("/").some((part) => part === ".." || part === "."))
+            {
+                throw new Error(`invalid Recipe normative path: ${relative}`);
+            }
+
+            const asset = path.resolve(contractRoot, relative);
+
+            if (!isWithin(contractRoot, asset) || !fs.existsSync(asset)
+                || !fs.lstatSync(asset).isFile()
+                || !isWithin(contractRoot, fs.realpathSync(asset)))
+            {
+                throw new Error(`missing or unsafe Recipe normative file: ${relative}`);
+            }
+
+            const actual = `sha256:${crypto.createHash("sha256")
+                .update(fs.readFileSync(asset)).digest("hex")}`;
+
+            if (actual !== expected)
+            {
+                throw new Error(`Recipe normative digest mismatch: ${relative}`);
+            }
+
+            normativeAssets.add(fs.realpathSync(asset));
+        }
+    }
 
     for (const entry of plan.entries)
     {
@@ -134,7 +178,7 @@ function materializeSourceAssets(plan)
             const extension = path.extname(canonicalSource).toLowerCase();
             const portableRelativePath = relativePath.split(path.sep).join("/");
 
-            if (!SOURCE_ASSET_EXTENSIONS.has(extension)
+            if (!SOURCE_ASSET_EXTENSIONS.has(extension) && !normativeAssets.has(canonicalSource)
                 && !(extension === ".mjs"
                     && /^core\/js\/composition\/[A-Za-z0-9._-]+\.mjs$/u.test(portableRelativePath)))
             {
