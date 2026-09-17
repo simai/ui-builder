@@ -29,8 +29,9 @@ def main():
   assert git(root,'rev-parse',revision+'^{tree}').decode().strip()==item['tree']
   assert git(root,'rev-parse',revision+':'+item['runtime_path']).decode().strip()==item['runtime_tree']
   assert sha(git(root,'archive','--format=tar',revision))==item['candidate_archive']['sha256']
+  assert sha(git(root,'archive','--format=tar',revision,item['runtime_path']))==item['runtime_archive']['sha256']
   for line in git(root,'status','--porcelain','--',item['runtime_path']).decode().splitlines():raise ValueError('dirty runtime: '+line)
-  releases[name]={'tag':None,'commit':revision,'tree':item['tree'],'runtime_subtree':item['runtime_tree'],'archive_sha256':item['candidate_archive']['sha256']}
+  releases[name]={'tag':None,'commit':revision,'tree':item['tree'],'runtime_subtree':item['runtime_tree'],'archive_sha256':item['runtime_archive']['sha256']}
  module_path=a.ui_root/'scripts/build-framework-registry.py';spec=importlib.util.spec_from_file_location('registry_builder',module_path);mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
  if a.phase=='owners':
   for kind,root,name in [('utility',a.ui_root,'core'),('component',a.ui_root,'core'),('smart-component',a.smart_root,'smart')]:
@@ -49,11 +50,11 @@ def main():
  contract_revision=git(a.smart_root,'rev-parse','HEAD').decode().strip()
  old=a.ui_root/'contracts/releases/ui-8c22fe2b80bb-smart-400d80e501ca.lock.json';lock=json.loads(old.read_text());compatibility='ui-'+sources['core']['revision'][:12]+'-smart-'+sources['smart']['revision'][:12];lock['compatibility_id']=compatibility
  for name,key in [('core','ui'),('smart','ui-smart')]:
-  item=sources[name];lock['runtime_sources'][key]={**lock['runtime_sources'][key],'commit':item['revision'],'tree':item['tree'],'runtime_tree':item['runtime_tree'],'archive_sha256':item['candidate_archive']['sha256'],'tag':None,'tag_object':None}
+  item=sources[name];lock['runtime_sources'][key]={**lock['runtime_sources'][key],'commit':item['revision'],'tree':item['tree'],'runtime_tree':item['runtime_tree'],'archive_sha256':item['runtime_archive']['sha256'],'tag':None,'tag_object':None}
  for name,root in [('source',a.source_root),('builder',Path(__file__).resolve().parents[1])]:
   revision=receipt[name+'_revision'];lock['build_inputs'][name]={'owner':'simai/ui-'+name,'commit':revision,'tree':git(root,'rev-parse',revision+'^{tree}').decode().strip(),'archive_sha256':sha(git(root,'archive','--format=tar',revision))}
  mod.validate_lock(lock)
- reference={'schema_id':'simai.framework.owner-manifest-reference','schema_version':1,'owner':'simai/ui-smart','runtime':{'tag':None,'commit':sources['smart']['revision'],'tree':sources['smart']['tree'],'subtree':sources['smart']['runtime_tree'],'archive_sha256':sources['smart']['candidate_archive']['sha256']},'manifest':{'path':'contracts/owners/smart-component.manifest.json','hash_mode':'canonical-json-v1','sha256':mod.canonical_manifest_hash(smart),'file_sha256':sha(smart_path.read_bytes())},'contract_revision':contract_revision,'status':'committed'}
+ reference={'schema_id':'simai.framework.owner-manifest-reference','schema_version':1,'owner':'simai/ui-smart','runtime':{'tag':None,'commit':sources['smart']['revision'],'tree':sources['smart']['tree'],'subtree':sources['smart']['runtime_tree'],'archive_sha256':sources['smart']['runtime_archive']['sha256']},'manifest':{'path':'contracts/owners/smart-component.manifest.json','hash_mode':'canonical-json-v1','sha256':mod.canonical_manifest_hash(smart),'file_sha256':sha(smart_path.read_bytes())},'contract_revision':contract_revision,'status':'committed'}
  mod.validate_smart_reference(reference,smart,lock,sha(smart_path.read_bytes()))
  write(a.ui_root/f'contracts/releases/{compatibility}.lock.json',lock);write(a.ui_root/f'contracts/registry-inputs/ui-smart-{contract_revision[:12]}.ref.json',reference)
  print(json.dumps({'compatibility_id':compatibility,'smart_contract_revision':contract_revision}))
