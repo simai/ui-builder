@@ -18,11 +18,12 @@
   },
   "scripts": {
     "check": "yarn check:english && yarn check:rtl-postcss && yarn test:reproducibility",
-    "verify": "yarn check:repository && yarn check:english && yarn check:rtl-postcss && yarn test:icons && yarn test:reproducibility",
+    "verify": "yarn check:repository && yarn check:english && yarn check:rtl-postcss && yarn test:icons && yarn test:reproducibility && yarn test:tools",
     "check:english": "node scripts/verify-english-surface.cjs",
     "check:repository": "node scripts/verify-repository-contract.cjs",
     "check:rtl-postcss": "node scripts/reproducibility/verify-rtl-postcss-policy.js --json",
     "test:reproducibility": "node --test tests/reproducibility/*.test.js",
+    "test:tools": "python3 -m unittest discover -s tests/tools -p 'test_*.py'",
     "test:icons": "node --test tests/icons/*.test.js",
     "build": "yarn build:all",
     "build:all": "webpack --config core.build.js --config component.build.js --config utility.build.js",

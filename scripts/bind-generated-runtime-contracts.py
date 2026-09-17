@@ -12,8 +12,19 @@ from pathlib import Path
 def sha(data):return hashlib.sha256(data).hexdigest()
 def git(root,*args):return subprocess.check_output(['git','-C',str(root),*args])
 def write(path,value):path.parent.mkdir(parents=True,exist_ok=True);path.write_text(json.dumps(value,ensure_ascii=False,indent=2)+'\n')
+REPOSITORY_OWNERS={
+ 'https://github.com/simai/ui':'simai/ui',
+ 'https://github.com/simai/ui-smart':'simai/ui-smart',
+}
+
+
 def rebind(value,bindings):
- if isinstance(value,dict):return {k:rebind(v,bindings) for k,v in value.items()}
+ if isinstance(value,dict):
+  rebound={k:rebind(v,bindings) for k,v in value.items()}
+  owner=REPOSITORY_OWNERS.get(rebound.get('repository'))
+  if owner in bindings and re.fullmatch(r'[0-9a-f]{40}',str(rebound.get('commit',''))):
+   rebound['commit']=bindings[owner]
+  return rebound
  if isinstance(value,list):return [rebind(v,bindings) for v in value]
  if isinstance(value,str):
   for owner,revision in bindings.items():value=re.sub(re.escape(owner)+r'@[0-9a-f]{40}:',owner+'@'+revision+':',value)
