@@ -118,18 +118,44 @@ function materializeSourceAssets(plan)
     const outputRoot = path.resolve(plan.outputRoot);
     const copied = [];
     const normativeAssets = new Set();
-    const contractRoot = path.join(sourceRoot, "core/contracts/composition-recipe-v1");
-    const lockPath = path.join(contractRoot, "contract.lock.json");
+    const contractsRoot = path.join(sourceRoot, "core/contracts");
+    const normativeLocks = [{
+        contractRoot: path.join(contractsRoot, "composition-recipe-v1"),
+        schema: "simai.composition.recipe-contract-lock.v1",
+        label: "Recipe",
+    }];
 
-    if (plan.entries.some((entry) => entry.target === "core") && fs.existsSync(lockPath))
+    if (fs.existsSync(contractsRoot) && fs.lstatSync(contractsRoot).isDirectory())
     {
+        for (const directory of fs.readdirSync(contractsRoot).sort())
+        {
+            if (/^composition-[a-z0-9-]+-v[0-9]+$/u.test(directory) && directory !== "composition-recipe-v1")
+            {
+                normativeLocks.push({
+                    contractRoot: path.join(contractsRoot, directory),
+                    schema: "simai.composition.capability-contract-lock.v1",
+                    label: `Composition capability ${directory}`,
+                });
+            }
+        }
+    }
+
+    for (const { contractRoot, schema, label } of normativeLocks)
+    {
+        const lockPath = path.join(contractRoot, "contract.lock.json");
+
+        if (!plan.entries.some((entry) => entry.target === "core") || !fs.existsSync(lockPath))
+        {
+            continue;
+        }
+
         const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
 
-        if (lock.schema !== "simai.composition.recipe-contract-lock.v1"
+        if (lock.schema !== schema
             || !lock.normativeFiles || typeof lock.normativeFiles !== "object"
             || Array.isArray(lock.normativeFiles))
         {
-            throw new Error("invalid Recipe normative-file lock");
+            throw new Error(`invalid ${label} normative-file lock`);
         }
 
         for (const [relative, expected] of Object.entries(lock.normativeFiles))
@@ -137,7 +163,7 @@ function materializeSourceAssets(plan)
             if (!relative || relative.includes("\\") || path.isAbsolute(relative)
                 || relative.split("/").some((part) => part === ".." || part === "."))
             {
-                throw new Error(`invalid Recipe normative path: ${relative}`);
+                throw new Error(`invalid ${label} normative path: ${relative}`);
             }
 
             const asset = path.resolve(contractRoot, relative);
@@ -146,7 +172,7 @@ function materializeSourceAssets(plan)
                 || !fs.lstatSync(asset).isFile()
                 || !isWithin(contractRoot, fs.realpathSync(asset)))
             {
-                throw new Error(`missing or unsafe Recipe normative file: ${relative}`);
+                throw new Error(`missing or unsafe ${label} normative file: ${relative}`);
             }
 
             const actual = `sha256:${crypto.createHash("sha256")
@@ -154,7 +180,7 @@ function materializeSourceAssets(plan)
 
             if (actual !== expected)
             {
-                throw new Error(`Recipe normative digest mismatch: ${relative}`);
+                throw new Error(`${label} normative digest mismatch: ${relative}`);
             }
 
             normativeAssets.add(fs.realpathSync(asset));

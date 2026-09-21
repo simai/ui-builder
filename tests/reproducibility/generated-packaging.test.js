@@ -114,6 +114,46 @@ test("Core packaging publishes only the Composition ESM runtime", () => {
     }
 });
 
+test("Core packages capability bundle Markdown only from its own verified lock", () => {
+    const subject = fixture();
+    const prefix = "core/contracts/composition-regions-v1/";
+    const content = "# Composition Regions 1.0.0\n";
+    const input = writeFile(subject.sourceRoot, "core/index.js", "export {};\n");
+    const readme = writeFile(subject.sourceRoot, `${prefix}README.md`, content);
+    writeFile(subject.sourceRoot, `${prefix}checks/digest-parity.php`, "<?php\n");
+    writeFile(subject.sourceRoot, `${prefix}notes.md`, "not public\n");
+    writeFile(subject.sourceRoot, "core/contracts/unrelated-v1/README.md", "not public\n");
+    const lock = writeFile(subject.sourceRoot, `${prefix}contract.lock.json`, JSON.stringify({
+        schema: "simai.composition.capability-contract-lock.v1",
+        version: "1.0.0",
+        normativeFiles: {
+            "README.md": `sha256:${crypto.createHash("sha256").update(content).digest("hex")}`,
+        },
+    }));
+    subject.plan.entries = [{ input, key: "core", target: "core",
+        outputDirectory: path.join(subject.outputRoot, "core") }];
+    writeFile(subject.outputRoot, ".compat/utility-full/css/utility.full.css", "");
+
+    try
+    {
+        materializeGeneratedPackaging(subject.plan);
+        assert.equal(fs.readFileSync(path.join(subject.outputRoot, `${prefix}README.md`), "utf8"), content);
+        assert.equal(fs.existsSync(path.join(subject.outputRoot, `${prefix}contract.lock.json`)), true);
+        assert.equal(fs.existsSync(path.join(subject.outputRoot, `${prefix}notes.md`)), false);
+        assert.equal(fs.existsSync(path.join(subject.outputRoot, `${prefix}checks/digest-parity.php`)), false);
+        assert.equal(fs.existsSync(path.join(subject.outputRoot, "core/contracts/unrelated-v1/README.md")), false);
+        fs.writeFileSync(readme, "changed bytes");
+        assert.throws(() => materializeGeneratedPackaging(subject.plan), /composition-regions-v1 normative digest mismatch/);
+        fs.writeFileSync(readme, content);
+        fs.writeFileSync(lock, JSON.stringify({ schema: "simai.composition.recipe-contract-lock.v1", normativeFiles: {} }));
+        assert.throws(() => materializeGeneratedPackaging(subject.plan), /invalid Composition capability composition-regions-v1 normative-file lock/);
+    }
+    finally
+    {
+        fs.rmSync(subject.workspace, { force: true, recursive: true });
+    }
+});
+
 test("Core packages lock-listed normative Markdown and rejects incomplete or changed bytes", () => {
     const subject = fixture();
     const prefix = "core/contracts/composition-recipe-v1/";
