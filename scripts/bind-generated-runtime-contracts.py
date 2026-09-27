@@ -20,6 +20,50 @@ def rebind(value,bindings):
  return value
 
 
+def owner_of(repository):
+ """The owner an entry's provenance repository URL names."""
+ name=str(repository or '').rstrip('/')
+ for suffix in ('.git',):
+  if name.endswith(suffix):name=name[:-len(suffix)]
+ parts=name.split('/')
+ return '/'.join(parts[-2:]) if len(parts)>=2 else ''
+
+
+def rebind_provenance(manifest,bindings):
+ """Move the bare revisions that an owner@revision: rewrite cannot reach.
+
+ Every entry records the runtime it came from as provenance.commit, a plain
+ revision with no owner prefix. Left behind, it names the previous runtime while
+ the release block names the new one, and the owner repository's own contract
+ test fails on every entry.
+ """
+ moved=0
+ for entry in manifest.get('entries',[]):
+  provenance=entry.get('provenance')
+  if not isinstance(provenance,dict) or 'commit' not in provenance:continue
+  revision=bindings.get(owner_of(provenance.get('repository')))
+  if revision is None:
+   raise ValueError('unbound provenance repository: '+str(provenance.get('repository')))
+  if provenance['commit']!=revision:
+   provenance['commit']=revision;moved+=1
+ return moved
+
+
+def assert_no_stale_revisions(manifest,previous,bindings):
+ """Nothing may still name the revisions this binding replaces.
+
+ The guard is deliberately blunt: any field that carries a superseded revision,
+ including one added to the schema later, fails here rather than in a consumer.
+ """
+ current=set(bindings.values())
+ stale={revision for revision in previous if revision and revision not in current}
+ if not stale:return
+ serialized=json.dumps(manifest)
+ found=sorted(revision for revision in stale if revision in serialized)
+ if found:
+  raise ValueError('stale revision left in the manifest: '+', '.join(found))
+
+
 def main():
  p=argparse.ArgumentParser();p.add_argument('--ui-root',type=Path,required=True);p.add_argument('--smart-root',type=Path,required=True);p.add_argument('--receipt',type=Path,required=True);p.add_argument('--source-root',type=Path,required=True);p.add_argument('--phase',choices=['owners','reference'],required=True);a=p.parse_args()
  receipt=json.loads(a.receipt.read_text());sources=receipt['runtime_sources']; roots={'core':a.ui_root,'smart':a.smart_root}
@@ -35,7 +79,13 @@ def main():
  module_path=a.ui_root/'scripts/build-framework-registry.py';spec=importlib.util.spec_from_file_location('registry_builder',module_path);mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
  if a.phase=='owners':
   for kind,root,name in [('utility',a.ui_root,'core'),('component',a.ui_root,'core'),('smart-component',a.smart_root,'smart')]:
-   path=root/f'contracts/owners/{kind}.manifest.json';original=json.loads(path.read_text());manifest=rebind(original,bindings);manifest['release']=releases[name]
+   path=root/f'contracts/owners/{kind}.manifest.json';original=json.loads(path.read_text());manifest=rebind(original,bindings)
+   previous=[(original.get('release') or {}).get('commit')]+[
+    (entry.get('provenance') or {}).get('commit') for entry in original.get('entries',[])
+   ]
+   manifest['release']=releases[name]
+   rebind_provenance(manifest,bindings)
+   assert_no_stale_revisions(manifest,previous,bindings)
    # Keep all independently curated lifecycle/readiness/dependency decisions.
    assert manifest['defaults']['readiness']==original['defaults']['readiness']
    mod.validate_manifest_envelope(manifest,kind)
