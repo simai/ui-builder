@@ -79,6 +79,8 @@ LAYOUT=(core/core:distr/core core/rule:distr/rule component/component:distr/comp
 for pair in "${LAYOUT[@]}"; do
     [ -d "$OUTPUT/${pair%%:*}" ] || fail "the build output has no ${pair%%:*}"
 done
+# A runtime tree git ignores is laid down and never committed.
+git -C "$UI" check-ignore -q distr/smart/probe && fail "ui ignores distr/smart (.gitignore): the release would not carry Smart"
 for repository in "$UI" ${MIRROR:+"$MIRROR"}; do
     [ -z "$(git -C "$repository" status --porcelain)" ] || fail "$repository is not clean"
 done

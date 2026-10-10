@@ -138,8 +138,10 @@ def verify(root,item,label):
  return {'tag':None,'commit':revision,'tree':item['tree'],'runtime_subtree':item['runtime_tree'],'archive_sha256':item['runtime_archive']['sha256']}
 
 
-def lock_source(owner,release,runtime_path):
- return {'owner':owner,'tag':None,'tag_object':None,'commit':release['commit'],'tree':release['tree'],'runtime_path':runtime_path,'runtime_tree':release['runtime_subtree'],'archive_sha256':release['archive_sha256']}
+def lock_source(owner,release,runtime_path,revision=None):
+ value={'owner':owner,'tag':None,'tag_object':None}
+ if revision:value['revision']=revision
+ return {**value,'commit':release['commit'],'tree':release['tree'],'runtime_path':runtime_path,'runtime_tree':release['runtime_subtree'],'archive_sha256':release['archive_sha256']}
 
 
 def main():
@@ -225,21 +227,21 @@ def main():
  # v1 route copied it from a template lock and it went stale).
  inventory={'utility_rules':manifests['utility']['inventory']['expected']['rules'],'utility_families':manifests['utility']['inventory']['expected']['entries'],'components':manifests['component']['inventory']['expected']['entries'],'smart_components':smart['inventory']['expected'],'recipes':manifests['recipe']['inventory']['expected']['entries']}
  tail={'build_inputs':build_inputs,'inventory':inventory,'exclusions':[],'claims':{'full_compatible':False,'production_ready':False,'all_items_ready':False}}
- head={'schema_id':'simai.framework.release-lock','status':'bounded','profile':'plain-assets-v1'}
+ def head(version,compatibility):return {'schema_id':'simai.framework.release-lock','schema_version':version,'compatibility_id':compatibility,'status':'bounded','profile':'plain-assets-v1'}
  if not v2:
   assert not git(a.smart_root,'status','--porcelain','--',SMART_MANIFEST)
   contract_revision=text(a.smart_root,'rev-parse','HEAD')
   compatibility='ui-'+release[:12]+'-smart-'+releases['smart']['commit'][:12]
-  lock={**head,'schema_version':1,'compatibility_id':compatibility,'runtime_sources':{'ui':lock_source(UI,releases['core'],'distr'),'ui-smart':lock_source(MIRROR,releases['smart'],'smart')},**tail}
+  lock={**head(1,compatibility),'runtime_sources':{'ui':lock_source(UI,releases['core'],'distr'),'ui-smart':lock_source(MIRROR,releases['smart'],'smart')},**tail}
   mod.validate_lock(lock)
   reference={'schema_id':'simai.framework.owner-manifest-reference','schema_version':1,'owner':MIRROR,'runtime':{'tag':None,'commit':releases['smart']['commit'],'tree':releases['smart']['tree'],'subtree':releases['smart']['runtime_subtree'],'archive_sha256':releases['smart']['archive_sha256']},'manifest':{'path':SMART_MANIFEST,'hash_mode':'canonical-json-v1','sha256':mod.canonical_manifest_hash(smart),'file_sha256':sha(smart_path.read_bytes())},'contract_revision':contract_revision,'status':'committed'}
   mod.validate_smart_reference(reference,smart,lock,sha(smart_path.read_bytes()))
   write(a.ui_root/f'contracts/releases/{compatibility}.lock.json',lock);write(a.ui_root/f'contracts/registry-inputs/ui-smart-{contract_revision[:12]}.ref.json',reference)
   print(json.dumps({'compatibility_id':compatibility,'smart_contract_revision':contract_revision}));return
  compatibility='ui-'+release[:12]
- core={**lock_source(UI,releases['core'],'distr'),'revision':release}
- smart_source={**lock_source(UI,releases['smart'],SMART_TREE),'revision':release}
- lock={**head,'schema_version':2,'compatibility_id':compatibility,'runtime_sources':{'core':core,'smart':smart_source}}
+ core=lock_source(UI,releases['core'],'distr',release)
+ smart_source=lock_source(UI,releases['smart'],SMART_TREE,release)
+ lock={**head(2,compatibility),'runtime_sources':{'core':core,'smart':smart_source}}
  written={'compatibility_id':compatibility}
  if 'mirror' in releases:
   mirror_manifest=json.loads((a.mirror_root/SMART_MANIFEST).read_text());assert mirror_manifest['release']==releases['mirror']
@@ -253,7 +255,7 @@ def main():
  if 'pair' in lock:
   # v1 readers resolve a release by the ui-smart commit they pin (ui-admin's
   # pin reads runtime_sources[*].commit); the alias names the same bytes in v1.
-  alias={**head,'schema_version':1,'compatibility_id':lock['pair'],'runtime_sources':{'ui':lock_source(UI,releases['core'],'distr'),'ui-smart':lock_source(MIRROR,releases['mirror'],'smart')},**tail}
+  alias={**head(1,lock['pair']),'runtime_sources':{'ui':lock_source(UI,releases['core'],'distr'),'ui-smart':lock_source(MIRROR,releases['mirror'],'smart')},**tail}
   mod.validate_lock(alias)
   write(a.ui_root/f'contracts/releases/{lock["pair"]}.lock.json',alias)
  print(json.dumps(written))
