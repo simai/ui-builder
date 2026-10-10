@@ -18,6 +18,10 @@ for the framework repositories.
 2. [Product runner reference](developer/product-runners.md)
 3. [Dependency policy](developer/dependency-policy.md)
 
+### Publish a release
+
+- [Publishing a Framework release](developer/framework-release.md)
+
 ### Review the migration provenance
 
 - [Migration from the legacy `sf5.webpack` repository](developer/migration-from-sf5-webpack.md)

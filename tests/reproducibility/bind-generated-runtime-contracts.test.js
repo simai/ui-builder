@@ -171,3 +171,214 @@ test("an entry whose provenance names an unbound repository stops the binding", 
 
     fs.rmSync(context.workspace, { recursive: true, force: true });
 });
+
+// ---------------------------------------------------------------------------
+// Lock v2: one ui build commit is the release, Smart is in ui/distr/smart, and
+// ui-smart is kept as a byte-identical mirror for v1 readers.
+
+const RECEIPT_TOOL = path.join(__dirname, "../../scripts/write-release-receipt.py");
+
+// Enough of ui's registry module for both phases: the lock is checked for the
+// identity each version promises, nothing more (ui's own suite checks the rest).
+const REGISTRY_STUB_V2 = [
+    "import re",
+    "def validate_manifest_envelope(manifest, kind):",
+    "    assert manifest['release']['commit']",
+    "def validate_lock(lock):",
+    "    if lock['schema_version'] == 2:",
+    "        assert re.fullmatch(r'ui-[0-9a-f]{12}', lock['compatibility_id'])",
+    "        assert lock['compatibility_id'] == 'ui-' + lock['runtime_sources']['core']['revision'][:12]",
+    "    else:",
+    "        sources = lock['runtime_sources']",
+    "        assert lock['compatibility_id'] == 'ui-%s-smart-%s' % (sources['ui']['commit'][:12], sources['ui-smart']['commit'][:12])",
+    "",
+].join("\n");
+
+function commitAll(root, message)
+{
+    git(root, "add", "-A");
+    git(root, "commit", "--quiet", "-m", message);
+    return git(root, "rev-parse", "HEAD");
+}
+
+function smartManifest(revision, coreRevision)
+{
+    const manifest = ownerManifest("smart-component", "simai/ui-smart", "https://github.com/simai/ui-smart", revision, "smart", "thing/js/thing.js");
+    manifest.owner = { id: "simai/ui-smart", repository: "https://github.com/simai/ui-smart", manifest_path: "contracts/owners/smart-component.manifest.json" };
+    manifest.inventory = { source: `simai/ui-smart@${revision}:smart`, selector: "*/js/*.js", expected: 1 };
+    manifest.entries[0].provenance.source_refs.push(`simai/ui@${coreRevision}:distr/rule/rule.json#name=cl-thing`);
+    manifest.entries[0].documentation_refs = [`simai/ui-smart@${revision}:README.md`];
+    return manifest;
+}
+
+function v2Fixture()
+{
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "sf-bind-v2-"));
+    const uiRoot = path.join(workspace, "ui");
+    const mirrorRoot = path.join(workspace, "ui-smart");
+    const sourceRoot = path.join(workspace, "ui-source");
+    const previousCore = repository(uiRoot, "distr/core", "core.css");
+    const previousSmart = repository(mirrorRoot, "smart/thing/js", "thing.js");
+    repository(sourceRoot, "src", "index.js");
+    writeFile(uiRoot, "scripts/build-framework-registry.py", REGISTRY_STUB_V2);
+    writeFile(uiRoot, "README.md", "ui\n");
+    for (const kind of ["utility", "component", "recipe"]) {
+        const manifest = ownerManifest(kind, "simai/ui", "https://github.com/simai/ui", previousCore, "distr", "core/core.css");
+        manifest.inventory = { expected: { rules: 3, entries: 2 } };
+        writeFile(uiRoot, `contracts/owners/${kind}.manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`);
+    }
+    writeFile(mirrorRoot, "README.md", "ui-smart\n");
+    writeFile(mirrorRoot, "contracts/owners/smart-component.manifest.json", `${JSON.stringify(smartManifest(previousSmart, previousCore), null, 2)}\n`);
+    commitAll(uiRoot, "metadata");
+    commitAll(mirrorRoot, "metadata");
+    return { workspace, uiRoot, mirrorRoot, sourceRoot };
+}
+
+// What publish-framework-release.sh does around the binder, step for step.
+function publish(context, coreBytes, smartBytes)
+{
+    writeFile(context.uiRoot, "distr/core/core.css", coreBytes);
+    writeFile(context.uiRoot, "distr/smart/thing/js/thing.js", smartBytes);
+    const release = commitAll(context.uiRoot, "Build");
+    writeFile(context.mirrorRoot, "smart/thing/js/thing.js", smartBytes);
+    if (git(context.mirrorRoot, "status", "--porcelain")) commitAll(context.mirrorRoot, "Build");
+    const receipt = path.join(context.workspace, `receipt-${release.slice(0, 12)}.json`);
+    execFileSync("python3", [RECEIPT_TOOL, "--ui-root", context.uiRoot, "--mirror-root", context.mirrorRoot, "--source-root", context.sourceRoot, "--output", receipt]);
+    const bind = (phase) => execFileSync("python3", [
+        TOOL, "--ui-root", context.uiRoot, "--smart-root", context.uiRoot, "--mirror-root", context.mirrorRoot,
+        "--receipt", receipt, "--source-root", context.sourceRoot, "--phase", phase,
+    ], { encoding: "utf8" });
+    bind("owners");
+    if (git(context.mirrorRoot, "status", "--porcelain")) commitAll(context.mirrorRoot, "Bind Smart metadata");
+    const written = JSON.parse(bind("reference").trim().split("\n").pop());
+    commitAll(context.uiRoot, "Bind the registry");
+    const read = (root, file) => JSON.parse(fs.readFileSync(path.join(root, file), "utf8"));
+    return {
+        release,
+        receipt: read(context.workspace, path.basename(receipt)),
+        written,
+        lock: read(context.uiRoot, `contracts/releases/${written.compatibility_id}.lock.json`),
+        alias: written.pair ? read(context.uiRoot, `contracts/releases/${written.pair}.lock.json`) : null,
+        smart: read(context.uiRoot, "contracts/owners/smart-component.manifest.json"),
+        mirror: read(context.mirrorRoot, "contracts/owners/smart-component.manifest.json"),
+    };
+}
+
+test("v2: the release is one ui build commit, named ui-<12>, with no template lock", () => {
+    const context = v2Fixture();
+    const result = publish(context, "core-1\n", "smart-1\n");
+    const mirrorCommit = git(context.mirrorRoot, "log", "-1", "--format=%H", "--", "smart");
+
+    assert.equal(result.written.compatibility_id, `ui-${result.release.slice(0, 12)}`);
+    assert.equal(result.lock.schema_version, 2);
+    assert.deepEqual(Object.keys(result.lock.runtime_sources).sort(), ["core", "smart"]);
+    for (const [side, runtimePath] of [["core", "distr"], ["smart", "distr/smart"]]) {
+        const source = result.lock.runtime_sources[side];
+        assert.equal(source.owner, "simai/ui");
+        assert.equal(source.revision, result.release, `${side} is the same revision`);
+        assert.equal(source.commit, result.release, `${side} was written by the release`);
+        assert.equal(source.runtime_path, runtimePath);
+        assert.equal(source.runtime_tree, git(context.uiRoot, "rev-parse", `${result.release}:${runtimePath}`));
+    }
+    assert.equal(result.lock.mirror.commit, mirrorCommit);
+    assert.equal(result.lock.mirror.runtime_tree, result.lock.runtime_sources.smart.runtime_tree, "byte-identical copies");
+    assert.equal(result.lock.pair, `ui-${result.release.slice(0, 12)}-smart-${mirrorCommit.slice(0, 12)}`);
+    assert.equal(result.lock.inventory.smart_components, 1, "inventory is read from the manifests");
+
+    // The v1 alias is what a reader pinning ui and ui-smart resolves.
+    assert.equal(result.alias.schema_version, 1);
+    assert.equal(result.alias.compatibility_id, result.lock.pair);
+    assert.equal(result.alias.runtime_sources.ui.commit, result.release);
+    assert.equal(result.alias.runtime_sources["ui-smart"].commit, mirrorCommit);
+
+    fs.rmSync(context.workspace, { recursive: true, force: true });
+});
+
+test("v2: the Smart manifest moves into ui, seeded from the mirror's", () => {
+    const context = v2Fixture();
+    const result = publish(context, "core-1\n", "smart-1\n");
+    const mirrorCommit = result.lock.mirror.commit;
+
+    assert.equal(result.smart.owner.id, "simai/ui");
+    assert.equal(result.smart.release.commit, result.release);
+    assert.equal(result.smart.release.runtime_subtree, result.lock.runtime_sources.smart.runtime_tree);
+    assert.equal(result.smart.inventory.source, `simai/ui@${result.release}:distr/smart`);
+    const entry = result.smart.entries[0];
+    assert.equal(entry.owner, "simai/ui");
+    assert.equal(entry.provenance.repository, "https://github.com/simai/ui");
+    assert.equal(entry.provenance.commit, result.release);
+    assert.deepEqual(entry.runtime.asset_paths, [`simai/ui@${result.release}:distr/smart/thing/js/thing.js`]);
+    assert.ok(entry.provenance.source_refs.includes(`simai/ui@${result.release}:distr/rule/rule.json#name=cl-thing`));
+    assert.deepEqual(entry.documentation_refs, [`simai/ui@${result.release}:README.md`]);
+    assert.ok(!JSON.stringify(result.smart).includes("ui-smart"), "the ui-owned manifest names ui only");
+
+    // The mirror keeps its own manifest, bound to the mirror commit.
+    assert.equal(result.mirror.owner.id, "simai/ui-smart");
+    assert.equal(result.mirror.release.commit, mirrorCommit);
+    assert.deepEqual(result.mirror.entries[0].runtime.asset_paths, [`simai/ui-smart@${mirrorCommit}:smart/thing/js/thing.js`]);
+    assert.ok(result.mirror.entries[0].provenance.source_refs.includes(`simai/ui@${result.release}:distr/rule/rule.json#name=cl-thing`));
+
+    fs.rmSync(context.workspace, { recursive: true, force: true });
+});
+
+test("v2: Smart bytes that did not move keep the build commit that wrote them", () => {
+    const context = v2Fixture();
+    const first = publish(context, "core-1\n", "smart-1\n");
+    const second = publish(context, "core-2\n", "smart-1\n");
+
+    assert.notEqual(second.release, first.release);
+    assert.equal(second.written.compatibility_id, `ui-${second.release.slice(0, 12)}`);
+    assert.equal(second.lock.runtime_sources.core.commit, second.release);
+    assert.equal(second.lock.runtime_sources.smart.revision, second.release, "one release revision for both trees");
+    assert.equal(second.lock.runtime_sources.smart.commit, first.release, "Smart is named by the commit that wrote it");
+    assert.equal(second.lock.mirror.commit, first.lock.mirror.commit, "the mirror did not move either");
+    // Asset paths follow the Smart writer; Core references follow the release.
+    const entry = second.smart.entries[0];
+    assert.deepEqual(entry.runtime.asset_paths, [`simai/ui@${first.release}:distr/smart/thing/js/thing.js`]);
+    assert.ok(entry.provenance.source_refs.includes(`simai/ui@${second.release}:distr/rule/rule.json#name=cl-thing`));
+    assert.equal(second.smart.release.commit, first.release);
+
+    fs.rmSync(context.workspace, { recursive: true, force: true });
+});
+
+test("v2: a mirror that is not byte-identical stops the binding", () => {
+    const context = v2Fixture();
+    publish(context, "core-1\n", "smart-1\n");
+    writeFile(context.uiRoot, "distr/smart/thing/js/thing.js", "smart-2\n");
+    commitAll(context.uiRoot, "Build");
+    writeFile(context.mirrorRoot, "smart/thing/js/thing.js", "hand-edited\n");
+    commitAll(context.mirrorRoot, "Build");
+    const receipt = path.join(context.workspace, "drift.json");
+    execFileSync("python3", [RECEIPT_TOOL, "--ui-root", context.uiRoot, "--mirror-root", context.mirrorRoot, "--source-root", context.sourceRoot, "--output", receipt]);
+    assert.throws(
+        () => execFileSync("python3", [TOOL, "--ui-root", context.uiRoot, "--smart-root", context.uiRoot, "--mirror-root", context.mirrorRoot, "--receipt", receipt, "--source-root", context.sourceRoot, "--phase", "owners"], { stdio: "pipe" }),
+        (error) => /not byte-identical/.test(String(error.stderr)),
+    );
+    fs.rmSync(context.workspace, { recursive: true, force: true });
+});
+
+test("v2: a receipt naming a commit that did not write the tree stops the binding", () => {
+    const context = v2Fixture();
+    publish(context, "core-1\n", "smart-1\n");
+    writeFile(context.uiRoot, "distr/core/core.css", "core-2\n");
+    commitAll(context.uiRoot, "Build");
+    const receipt = path.join(context.workspace, "wrong.json");
+    execFileSync("python3", [RECEIPT_TOOL, "--ui-root", context.uiRoot, "--mirror-root", context.mirrorRoot, "--source-root", context.sourceRoot, "--output", receipt]);
+    const value = JSON.parse(fs.readFileSync(receipt, "utf8"));
+    // Claim the release as Smart's writer although distr/smart did not move.
+    const release = value.release_revision;
+    const smartPath = "distr/smart";
+    value.runtime_sources.smart = {
+        ...value.runtime_sources.smart,
+        revision: release,
+        tree: git(context.uiRoot, "rev-parse", `${release}^{tree}`),
+        candidate_archive: { sha256: crypto.createHash("sha256").update(execFileSync("git", ["-C", context.uiRoot, "archive", "--format=tar", release])).digest("hex") },
+        runtime_archive: { sha256: crypto.createHash("sha256").update(execFileSync("git", ["-C", context.uiRoot, "archive", "--format=tar", release, smartPath])).digest("hex") },
+    };
+    fs.writeFileSync(receipt, JSON.stringify(value));
+    assert.throws(
+        () => execFileSync("python3", [TOOL, "--ui-root", context.uiRoot, "--smart-root", context.uiRoot, "--mirror-root", context.mirrorRoot, "--receipt", receipt, "--source-root", context.sourceRoot, "--phase", "owners"], { stdio: "pipe" }),
+        (error) => /was last written by/.test(String(error.stderr)),
+    );
+    fs.rmSync(context.workspace, { recursive: true, force: true });
+});
