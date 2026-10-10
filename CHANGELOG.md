@@ -6,6 +6,18 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Added
 
+- SIMAI Framework Pro as a product: `run-pro-product-build.cjs` builds the four
+  Pro Smart components from an overlay (ui-source at the revision
+  ui-source-pro pins, with ui-source-pro laid over it) and writes the package
+  rule file `smart/rule.js`; `verify-pro-reproducibility.cjs` requires two
+  byte-identical waves; `publish-pro-release.sh` and `bind-pro-release.py`
+  publish a release into `ui-pro` with its owner manifest and a release lock
+  `pro-<12>` that requires the free release (`ui-<12>`) and the ui-source
+  revision it was built against (`docs/developer/pro-release.md`).
+- The Framework binder drops, from both Smart owner manifests, the components a
+  package provides (`ui/contracts/packages`), in the release that stops shipping
+  them.
+
 - A deterministic HarfBuzz WASM icon-subset library and CLI with a
   content-addressed WOFF2, CSS and `sf.icon_subset.v1` manifest contract.
 - A compatibility adapter that lets `icons.simai.io` retain its `/ms/css` API

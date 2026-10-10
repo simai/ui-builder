@@ -53,6 +53,11 @@ without `ui-smart` once no consumer reads it.
    assets `simai/ui@<rev>:distr/smart/...`); on the first v2 release it is
    seeded from the mirror's. The mirror's own manifest is rebound to the mirror
    commit and committed in `ui-smart`.
+   Components a package provides (`ui/contracts/packages/*.package.json`;
+   SIMAI Framework Pro is the first) leave both Smart owner manifests here,
+   in the release that stops shipping their folders: the binder drops their
+   entries and lowers `inventory.expected`, and refuses if a provided folder is
+   still in `distr/smart` or the mirror.
 5. **Write the release lock** (`--phase reference`): `ui-<12>.lock.json`, and,
    while mirrored, the v1 alias `ui-<12>-smart-<12>.lock.json` that v1 readers
    resolve (ui-admin's pin finds a release by the commits it pins).
@@ -80,6 +85,11 @@ without `ui-smart` once no consumer reads it.
 `revision` is the release, the same for both trees. `commit`, `tree`,
 `runtime_tree` and `archive_sha256` describe the commit that wrote each tree, as
 in v1. `mirror` and `pair` are present only while `ui-smart` is mirrored.
+
+## SIMAI Framework Pro
+
+Pro is released separately, into `ui-pro`, after the free release it was built
+and tested against: `docs/developer/pro-release.md`.
 
 ## Rollback
 

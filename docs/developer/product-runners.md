@@ -77,6 +77,27 @@ node scripts/run-smart-product-build.cjs \
   /absolute/path/to/smart-diagnostics.json
 ```
 
+## Pro
+
+SIMAI Framework Pro (`docs/developer/pro-release.md`). The source root is the
+`src` of a Pro overlay: ui-source at the revision ui-source-pro pins, with
+ui-source-pro laid over it (`libs/proProduct.js`, `materializeProOverlay`).
+
+```bash
+node scripts/run-pro-product-build.cjs \
+  /absolute/path/to/ui-builder \
+  /absolute/path/to/pro-overlay/src \
+  /absolute/path/to/new-pro-output \
+  /absolute/path/to/pro-diagnostics.json
+```
+
+The Smart lifecycle runs with an entry filter that keeps only the four Pro
+folders (`smart/admin-menu`, `smart/data-view`, `smart/property-view`,
+`smart/table`; an absent one fails the plan), and writes `smart/rule.js`, the
+package rule file, before packaging. Output: `<out>/smart/<folder>/...` and
+`<out>/smart/rule.js` (+ `.gz`), nothing else.
+`scripts/verify-pro-reproducibility.cjs` lays the overlay and runs this twice.
+
 ## Diagnostics contract
 
 Invocation errors are written to standard error as JSON with `status: 2` and a

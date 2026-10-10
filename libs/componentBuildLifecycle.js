@@ -16,6 +16,10 @@ const {
     validateLegacyRuntimeCompatibility,
 } = require("./legacyRuntimeCompatibility");
 const {
+    PRO_COMPONENTS,
+    materializeProPackageRule,
+} = require("./proProduct");
+const {
     createPostcssPlugins,
 } = require("./postcssPolicy");
 
@@ -154,6 +158,18 @@ const CORE_PROFILE = Object.freeze({
 const SMART_PROFILE = Object.freeze({
     configurationPoliciesByTarget: SMART_CONFIGURATION_POLICIES,
     label: "smart",
+    sassResourcesByTarget: SMART_SASS_RESOURCES,
+    targets: SMART_TARGETS,
+});
+// SIMAI Framework Pro: the Smart target over an overlay source tree (ui-source
+// at a pinned revision with ui-source-pro laid over it), keeping only the Pro
+// component entries, and the package rule file (smart/rule.js) written before
+// packaging so it is normalized and gzipped like every other output file.
+const PRO_PROFILE = Object.freeze({
+    configurationPoliciesByTarget: SMART_CONFIGURATION_POLICIES,
+    entryFilter: Object.freeze(PRO_COMPONENTS.map(name => `smart/${name}`)),
+    label: "pro",
+    packageRule: true,
     sassResourcesByTarget: SMART_SASS_RESOURCES,
     targets: SMART_TARGETS,
 });
@@ -313,6 +329,34 @@ function applyUtilityEntryFilter(definition, entryKeys)
     definition.plan.templates = definition.plan.templates.filter(template =>
         requested.has(`utility/${template.component}`));
     definition.templateCopies = definition.plan.templates;
+}
+
+function applyComponentEntryFilter(definition, keys)
+{
+    const requested = new Set(keys);
+    const available = new Set(definition.plan.entries.map(entry => entry.key));
+    const missing = keys.filter(key => !available.has(key));
+
+    if (missing.length > 0)
+    {
+        throw new Error(`the source has no entry for: ${missing.join(", ")}`);
+    }
+
+    definition.plan.entries = definition.plan.entries.filter(entry =>
+        requested.has(entry.key));
+    definition.configurations = definition.configurations.filter(configuration =>
+        Object.keys(configuration.entry).every(entry => requested.has(entry)));
+    definition.plan.templates = definition.plan.templates.filter(template =>
+        requested.has(`${template.target}/${template.component}`));
+    definition.templateCopies = definition.plan.templates;
+
+    const built = new Set(definition.configurations.flatMap(configuration =>
+        Object.keys(configuration.entry)));
+
+    if (keys.some(key => !built.has(key)))
+    {
+        throw new Error("a requested entry has no webpack configuration");
+    }
 }
 
 function usageReporter(runtime)
@@ -667,6 +711,11 @@ async function runBuild(options, runtime, profile)
             applyUtilityEntryFilter(definition, usage.entryKeys);
         }
 
+        if (profile.entryFilter)
+        {
+            applyComponentEntryFilter(definition, profile.entryFilter);
+        }
+
         if (profile === CORE_PROFILE || profile === UTILITY_PROFILE)
         {
             applyCoreSassPolicy(
@@ -803,6 +852,12 @@ async function runBuild(options, runtime, profile)
     try
     {
         materializeTemplates(definition.templateCopies);
+
+        if (profile.packageRule)
+        {
+            materializeProPackageRule(definition.plan);
+        }
+
         materializeGeneratedPackaging(definition.plan);
     }
     catch (error)
@@ -840,9 +895,15 @@ function runSmartBuild(options, runtime)
     return runBuild(options, runtime, SMART_PROFILE);
 }
 
+function runProBuild(options, runtime)
+{
+    return runBuild(options, runtime, PRO_PROFILE);
+}
+
 module.exports = {
     runComponentBuild,
     runCoreBuild,
+    runProBuild,
     runSmartBuild,
     runUtilityBuild,
 };

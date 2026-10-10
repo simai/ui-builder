@@ -127,6 +127,39 @@ def seed_ui_smart_manifest(mirror_manifest):
  return seeded
 
 
+def package_components(ui_root):
+ """The Smart components component packages provide, by id -> runtime folder.
+
+ Read from ui's contracts/packages/*.package.json (SIMAI Framework Pro is the
+ first package). Such a component ships from its own distribution, so it has
+ no entry in the free Smart owner manifests.
+ """
+ provided={}
+ directory=ui_root/'contracts/packages'
+ for path in sorted(directory.glob('*.package.json')) if directory.is_dir() else []:
+  for item in json.loads(path.read_text())['provides']:provided[item['id']]=item['folder']
+ return provided
+
+
+def retire_package_entries(manifest,provided,root,revision,tree):
+ """Drop the entries a package provides; the release must not carry them.
+
+ The entry leaves the free owner manifest in the release that stops shipping
+ its folder, and only then: a folder still present at the release is an error,
+ because the manifest would deny a component the bytes still hold.
+ """
+ retired=[entry['id'] for entry in manifest['entries'] if entry['id'] in provided]
+ if not retired:return manifest,[]
+ for public_id in retired:
+  folder=tree+'/'+provided[public_id]
+  if subprocess.run(['git','-C',str(root),'cat-file','-e',revision+':'+folder],capture_output=True).returncode==0:
+   raise ValueError(public_id+': a package provides it, but '+folder+' is still in the release')
+ manifest=dict(manifest)
+ manifest['entries']=[entry for entry in manifest['entries'] if entry['id'] not in provided]
+ manifest['inventory']=dict(manifest['inventory'],expected=manifest['inventory']['expected']-len(retired))
+ return manifest,retired
+
+
 def verify(root,item,label):
  """The receipt entry describes exactly this commit of this checkout."""
  revision=item['revision']
@@ -191,14 +224,19 @@ def main():
    assert manifest['defaults']['readiness']==original['defaults']['readiness']
    mod.validate_manifest_envelope(manifest,kind);write(path,manifest)
   targets=[]
+  provided=package_components(a.ui_root)
   if v2:
    path=a.ui_root/SMART_MANIFEST
    if path.is_file():original=json.loads(path.read_text())
    elif a.mirror_root:original=seed_ui_smart_manifest(json.loads((a.mirror_root/SMART_MANIFEST).read_text()))
    else:raise ValueError('no Smart owner manifest in ui and no mirror to seed it from')
+   original,retired=retire_package_entries(original,provided,a.ui_root,sources['smart']['revision'],SMART_TREE)
+   if retired:print('Retired from the ui Smart owner manifest (provided by a package): '+', '.join(retired))
    targets.append((path,original,{UI:smart_bindings},{UI:sources['smart']['revision']},releases['smart'],a.ui_root))
    if 'mirror' in releases:
     path=a.mirror_root/SMART_MANIFEST;original=json.loads(path.read_text())
+    original,retired=retire_package_entries(original,provided,a.mirror_root,releases['mirror']['commit'],'smart')
+    if retired:print('Retired from the mirror Smart owner manifest (provided by a package): '+', '.join(retired))
     targets.append((path,original,{UI:release,MIRROR:releases['mirror']['commit']},{MIRROR:releases['mirror']['commit']},releases['mirror'],a.mirror_root))
   else:
    path=a.smart_root/SMART_MANIFEST;original=json.loads(path.read_text())

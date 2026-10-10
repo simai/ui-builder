@@ -382,3 +382,63 @@ test("v2: a receipt naming a commit that did not write the tree stops the bindin
     );
     fs.rmSync(context.workspace, { recursive: true, force: true });
 });
+
+// A component a package provides (contracts/packages/<name>.package.json in ui;
+// SIMAI Framework Pro is the first) leaves the free Smart owner manifests in the
+// release that stops shipping its folder, and not before.
+function withPaidComponent(context)
+{
+    // The ui-owned manifest is seeded from the mirror's on the first v2 release,
+    // so the mirror is where the entry starts.
+    for (const root of [context.mirrorRoot]) {
+        const file = path.join(root, "contracts/owners/smart-component.manifest.json");
+        const manifest = JSON.parse(fs.readFileSync(file, "utf8"));
+        const paid = JSON.parse(JSON.stringify(manifest.entries[0]).replaceAll("thing", "paid"));
+        manifest.entries.push(paid);
+        manifest.inventory.expected = 2;
+        fs.writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
+        writeFile(root, "smart/paid/js/paid.js", "paid\n");
+        commitAll(root, "add paid");
+    }
+}
+
+function publishWithout(context, paidPresent)
+{
+    writeFile(context.uiRoot, "contracts/packages/pro.package.json", `${JSON.stringify({provides: [{id: "smart-component.paid", element: "sf-paid", rule_name: "cl-paid", folder: "paid", requires: []}]})}\n`);
+    commitAll(context.uiRoot, "name the package");
+    writeFile(context.uiRoot, "distr/core/core.css", "core-2\n");
+    writeFile(context.uiRoot, "distr/smart/thing/js/thing.js", "smart-1\n");
+    if (paidPresent) writeFile(context.uiRoot, "distr/smart/paid/js/paid.js", "paid\n");
+    else fs.rmSync(path.join(context.mirrorRoot, "smart/paid"), { recursive: true, force: true });
+    commitAll(context.uiRoot, "Build");
+    writeFile(context.mirrorRoot, "smart/thing/js/thing.js", "smart-1\n");
+    commitAll(context.mirrorRoot, "Build");
+    const receipt = path.join(context.workspace, "receipt-paid.json");
+    execFileSync("python3", [RECEIPT_TOOL, "--ui-root", context.uiRoot, "--mirror-root", context.mirrorRoot, "--source-root", context.sourceRoot, "--output", receipt]);
+    return execFileSync("python3", [
+        TOOL, "--ui-root", context.uiRoot, "--smart-root", context.uiRoot, "--mirror-root", context.mirrorRoot,
+        "--receipt", receipt, "--source-root", context.sourceRoot, "--phase", "owners",
+    ], { encoding: "utf8", stdio: "pipe" });
+}
+
+test("v2: a package component leaves both Smart owner manifests with its folder", () => {
+    const context = v2Fixture();
+    withPaidComponent(context);
+    const said = publishWithout(context, false);
+    assert.match(said, /Retired from the ui Smart owner manifest \(provided by a package\): smart-component\.paid/u);
+    assert.match(said, /Retired from the mirror Smart owner manifest \(provided by a package\): smart-component\.paid/u);
+    for (const root of [context.uiRoot, context.mirrorRoot]) {
+        const manifest = JSON.parse(fs.readFileSync(path.join(root, "contracts/owners/smart-component.manifest.json"), "utf8"));
+        assert.deepEqual(manifest.entries.map(({id}) => id), ["smart-component.thing"]);
+        assert.equal(manifest.inventory.expected, 1);
+    }
+    fs.rmSync(context.workspace, { recursive: true, force: true });
+});
+
+test("v2: a package component whose folder is still in the release stops the binding", () => {
+    const context = v2Fixture();
+    withPaidComponent(context);
+    // The mirror keeps smart/paid: the free release would still ship it.
+    assert.throws(() => publishWithout(context, true), (error) => /smart-component\.paid: a package provides it, but (distr\/)?smart\/paid is still in the release/u.test(String(error.stderr || error.message)));
+    fs.rmSync(context.workspace, { recursive: true, force: true });
+});
