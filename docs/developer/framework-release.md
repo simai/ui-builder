@@ -53,7 +53,7 @@ without `ui-smart` once no consumer reads it.
    assets `simai/ui@<rev>:distr/smart/...`); on the first v2 release it is
    seeded from the mirror's. The mirror's own manifest is rebound to the mirror
    commit and committed in `ui-smart`.
-   Components a package provides (`ui/contracts/packages/*.package.json`;
+   Components a package provides (`ui/distr/core/contracts/packages/*.package.json`, source ui-source `src/core/contracts/packages/`;
    SIMAI Framework Pro is the first) leave both Smart owner manifests here,
    in the release that stops shipping their folders: the binder drops their
    entries and lowers `inventory.expected`, and refuses if a provided folder is

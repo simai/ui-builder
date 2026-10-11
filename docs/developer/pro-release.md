@@ -73,7 +73,7 @@ scripts/publish-pro-release.sh \
 1. **Check the build and the free release** (`bind-pro-release.py output`,
    `package`). The output is the one the report hashed, and is the four
    folders and `rule.js`. `ui-<12>` exists, and its package reference
-   `ui/contracts/packages/pro.package.json` agrees with the Pro rules: the same
+   `ui/distr/core/contracts/packages/pro.package.json` (source: ui-source `src/core/contracts/packages/`) agrees with the Pro rules: the same
    rules, tags and folders, none of the folders in its `distr/smart`, and each
    entry's `requires` equal to its rule's relations as registry ids (a Pro rule
    by its Pro id, any other by the free registry's mapping over the release's

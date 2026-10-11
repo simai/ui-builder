@@ -130,12 +130,12 @@ def seed_ui_smart_manifest(mirror_manifest):
 def package_components(ui_root):
  """The Smart components component packages provide, by id -> runtime folder.
 
- Read from ui's contracts/packages/*.package.json (SIMAI Framework Pro is the
+ Read from ui's distr/core/contracts/packages/*.package.json (SIMAI Framework Pro is the
  first package). Such a component ships from its own distribution, so it has
  no entry in the free Smart owner manifests.
  """
  provided={}
- directory=ui_root/'contracts/packages'
+ directory=ui_root/'distr/core/contracts/packages'
  for path in sorted(directory.glob('*.package.json')) if directory.is_dir() else []:
   for item in json.loads(path.read_text())['provides']:provided[item['id']]=item['folder']
  return provided

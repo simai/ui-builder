@@ -19,7 +19,7 @@
 #   1. Checks the build: the report passed, its output is the bytes it hashed,
 #      and they are the four Pro folders and smart/rule.js, nothing else. Checks
 #      the free release: ui-<12> exists, was built from the ui-source revision Pro
-#      was built over, and its package reference (contracts/packages/pro.package.json)
+#      was built over, and its package reference (distr/core/contracts/packages/pro.package.json)
 #      agrees with the Pro rules (bind-pro-release.py package).
 #   2. Lays wave-1/output/pro/smart into ui-pro/smart and commits ui-pro
 #      ("Build: <subject>"): that commit is the release, pro-<12>.

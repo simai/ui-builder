@@ -383,7 +383,7 @@ test("v2: a receipt naming a commit that did not write the tree stops the bindin
     fs.rmSync(context.workspace, { recursive: true, force: true });
 });
 
-// A component a package provides (contracts/packages/<name>.package.json in ui;
+// A component a package provides (distr/core/contracts/packages/<name>.package.json in ui;
 // SIMAI Framework Pro is the first) leaves the free Smart owner manifests in the
 // release that stops shipping its folder, and not before.
 function withPaidComponent(context)
@@ -404,7 +404,7 @@ function withPaidComponent(context)
 
 function publishWithout(context, paidPresent)
 {
-    writeFile(context.uiRoot, "contracts/packages/pro.package.json", `${JSON.stringify({provides: [{id: "smart-component.paid", element: "sf-paid", rule_name: "cl-paid", folder: "paid", requires: []}]})}\n`);
+    writeFile(context.uiRoot, "distr/core/contracts/packages/pro.package.json", `${JSON.stringify({provides: [{id: "smart-component.paid", element: "sf-paid", rule_name: "cl-paid", folder: "paid", requires: []}]})}\n`);
     commitAll(context.uiRoot, "name the package");
     writeFile(context.uiRoot, "distr/core/core.css", "core-2\n");
     writeFile(context.uiRoot, "distr/smart/thing/js/thing.js", "smart-1\n");

@@ -13,7 +13,7 @@ Phases (scripts/publish-pro-release.sh runs them in this order):
 
   package   Before anything is committed: the Pro rules in the build output
             agree with the package reference the free release publishes
-            (ui contracts/packages/pro.package.json): the same rules, tags
+            (ui distr/core/contracts/packages/pro.package.json): the same rules, tags
             and folders, and `requires` equal to each rule's relations as
             registry ids.
   receipt   After the build commit: what was built, from what, by whom.
@@ -45,7 +45,7 @@ TREE = 'smart'
 RULE_FILE = 'smart/rule.js'
 MANIFEST = 'contracts/owners/smart-component.manifest.json'
 UI_SMART_MANIFEST = 'contracts/owners/smart-component.manifest.json'
-PACKAGE_REFERENCE = 'contracts/packages/pro.package.json'
+PACKAGE_REFERENCE = 'distr/core/contracts/packages/pro.package.json'
 LOCK_SCHEMA = 'simai.framework.pro-release-lock'
 LOCK_KEYS = {
     'schema_id', 'schema_version', 'compatibility_id', 'status', 'profile', 'package',
