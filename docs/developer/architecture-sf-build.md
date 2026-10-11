@@ -60,6 +60,10 @@ left.
    bytes than the runtime the report claims. This is a reproducibility defect
    independent of sf-build and should be fixed first in phase 2 (resolve both
    through the builder dependency runtime, as the loaders are).
+   **Fixed** in 9662cb6: both resolve from the wave's dependency runtime
+   (`SF_BUILDER_DEPENDENCY_ROOT`), PostCSS itself comes from the running
+   loader; a Framework build with no builder `node_modules` gives the same four
+   product manifests as before.
 4. **Dependency footprint.** Every build tool (webpack, sass, babel, PostCSS)
    is a `devDependency`. A two-wave build installs the builder's
    `package.json` + `yarn.lock` twice into fresh runtimes through
@@ -297,7 +301,7 @@ is a separate, later decision.
 1. Resolve `postcss` and `postcss-dir-pseudo-class` in
    `postcssLateLogicalFallbacks.js` through the builder dependency runtime
    (the defect in section 1, item 3); prove the Framework output unchanged
-   with a two-wave build of the current release source.
+   with a two-wave build of the current release source. **Done** (9662cb6).
 2. Builder identity without git: record `name`, `version` and the SHA-256 of
    the shipped files when there is no `.git`, so an npm-installed copy works.
 3. Port `write-package-receipt.py` to Node, byte-identical receipts and
