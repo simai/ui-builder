@@ -14,16 +14,18 @@
   "packageManager": "yarn@1.22.22",
   "publicPath": "./",
   "bin": {
+    "sf-build": "bin/sf-build.js",
     "sf-icons": "bin/sf-icons.js"
   },
   "scripts": {
     "check": "yarn check:english && yarn check:rtl-postcss && yarn test:reproducibility",
-    "verify": "yarn check:repository && yarn check:english && yarn check:rtl-postcss && yarn test:icons && yarn test:reproducibility",
+    "verify": "yarn check:repository && yarn check:english && yarn check:rtl-postcss && yarn test:icons && yarn test:reproducibility && yarn test:sf-build",
     "check:english": "node scripts/verify-english-surface.cjs",
     "check:repository": "node scripts/verify-repository-contract.cjs",
     "check:rtl-postcss": "node scripts/reproducibility/verify-rtl-postcss-policy.js --json",
     "test:reproducibility": "node --test tests/reproducibility/*.test.js",
     "test:icons": "node --test tests/icons/*.test.js",
+    "test:sf-build": "node --test tests/sf-build/*.test.js",
     "build": "yarn build:all",
     "build:all": "webpack --config core.build.js --config component.build.js --config utility.build.js",
     "build:core": "webpack --config core.build.js",

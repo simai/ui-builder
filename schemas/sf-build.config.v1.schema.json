@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/simai/ui-builder/schemas/sf-build.config.v1.schema.json",
+  "title": "sf-build configuration v1",
+  "description": "What a product or an extension author commits beside a SIMAI Framework package folder so that `sf-build` can build it. Relative paths are resolved against the directory that holds the configuration file. Options given on the command line or to the Node API override the file.",
+  "type": "object",
+  "required": ["schema", "package"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "description": "Optional editor hint; ignored by sf-build.",
+      "type": "string"
+    },
+    "schema": {
+      "description": "The configuration schema id.",
+      "const": "simai.sf-build.config.v1"
+    },
+    "package": {
+      "description": "The package this configuration builds.",
+      "type": "object",
+      "required": ["name", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "The package name: the key of SF_BOOT_CONFIG.packages and the name the package rule file registers.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "kind": {
+          "description": "The kind of extension. Only component packages (simai.component-package) are built in v1; theme, utility and composition-type packages are reserved for later versions of this schema.",
+          "type": "string",
+          "enum": ["components"]
+        },
+        "path": {
+          "description": "The package folder (it holds framework.lock.json and src/smart/<folder>/). Default: the directory of the configuration file.",
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "description": "The commit of the package repository to build. Default: HEAD. The build always reads committed files, never the working tree.",
+          "type": "string",
+          "minLength": 1
+        },
+        "repository": {
+          "description": "The repository id recorded in the receipt, for example simai/larena. Default: owner/name of the origin GitHub remote.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "framework": {
+      "description": "Where the Framework comes from.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "description": "A ui-source checkout that holds the revision the package pins in framework.lock.json. Overridden by --ui-source and SF_BUILD_UI_SOURCE.",
+          "type": "string",
+          "minLength": 1
+        },
+        "ui": {
+          "description": "Optional ui checkout: the receipt resolves the free release built from the pinned revision and checks the package against it. Overridden by --ui and SF_BUILD_UI.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "out": {
+      "description": "The output path: the directory the built package is laid into (<out>/smart/..., package-receipt.json, package-<name>.tar).",
+      "type": "string",
+      "minLength": 1
+    },
+    "workspace": {
+      "description": "A directory, new for every run, for the two build waves. Default: a new temporary directory, removed after a successful run that lays an output.",
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}
