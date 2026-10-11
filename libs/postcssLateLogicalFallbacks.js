@@ -1,7 +1,73 @@
 "use strict";
 
-const postcss = require("postcss");
-const legacyDirection = require("postcss-dir-pseudo-class")({ dir: "ltr" });
+const path = require("node:path");
+const { createRequire } = require("node:module");
+
+// Product builds take every build dependency from the frozen per-wave runtime
+// named by SF_BUILDER_DEPENDENCY_ROOT (see scripts/run-*-product-build.cjs);
+// the builder checkout itself may have no node_modules. Direct builds fall
+// back to the builder root, exactly like the product runners do.
+const BUILDER_ROOT = path.resolve(__dirname, "..");
+const legacyDirectionByRoot = new Map();
+
+function builderDependencyRoot(env = process.env)
+{
+    const root = env.SF_BUILDER_DEPENDENCY_ROOT || BUILDER_ROOT;
+
+    if (!path.isAbsolute(root))
+    {
+        throw new Error(
+            `SF_BUILDER_DEPENDENCY_ROOT must be an absolute path: ${root}`,
+        );
+    }
+
+    return root;
+}
+
+function requireFromRuntime(runtimeRequire, request, root)
+{
+    try
+    {
+        return runtimeRequire(request);
+    }
+    catch (error)
+    {
+        if (error && error.code === "MODULE_NOT_FOUND")
+        {
+            throw new Error(
+                `builder dependency runtime ${root} lacks ${request}; `
+                + "prepare it with scripts/prepare-frozen-dependency-runtime.cjs",
+                { cause: error },
+            );
+        }
+
+        throw error;
+    }
+}
+
+// postcss-dir-pseudo-class is the selector converter postcss-preset-env
+// already depends on, so it is resolved through the runtime's preset.
+function legacyDirectionFor(root)
+{
+    if (!legacyDirectionByRoot.has(root))
+    {
+        const runtimeRequire = createRequire(path.join(root, "package.json"));
+        const presetPath = requireFromRuntime(
+            runtimeRequire.resolve,
+            "postcss-preset-env",
+            root,
+        );
+        const dirPseudoClass = requireFromRuntime(
+            createRequire(presetPath),
+            "postcss-dir-pseudo-class",
+            root,
+        );
+
+        legacyDirectionByRoot.set(root, dirPseudoClass({ dir: "ltr" }));
+    }
+
+    return legacyDirectionByRoot.get(root);
+}
 
 const NATIVE_DIRECTIONAL_SELECTOR = /:dir\((?:ltr|rtl)\)/;
 const DIRECTIONAL_SELECTOR = /^\[dir=(?:["'])?(?:ltr|rtl)(?:["'])?\]\s+/;
@@ -168,7 +234,7 @@ function logicalSupport(declaration, direction)
     return null;
 }
 
-function addLegacyFallbacks(root, result)
+function addLegacyFallbacks(root, { legacyDirection, postcss, result })
 {
     const rules = [];
     root.walkRules(rule => {
@@ -207,9 +273,13 @@ function addLegacyFallbacks(root, result)
 
 function createLateLogicalFallbackCleanup()
 {
+    const legacyDirection = legacyDirectionFor(builderDependencyRoot());
+
     return {
         postcssPlugin: "simai-late-logical-fallback-cleanup",
-        OnceExit(root, { result })
+        // `postcss` is the processor running this plugin (postcss-loader's,
+        // from the same runtime), so no second PostCSS is ever loaded here.
+        OnceExit(root, { postcss, result })
         {
             const protectedByParent = new WeakMap();
 
@@ -255,7 +325,7 @@ function createLateLogicalFallbackCleanup()
                 }
             });
 
-            addLegacyFallbacks(root, result);
+            addLegacyFallbacks(root, { legacyDirection, postcss, result });
         },
     };
 }
@@ -264,3 +334,4 @@ createLateLogicalFallbackCleanup.postcss = true;
 
 module.exports = createLateLogicalFallbackCleanup;
 module.exports.varFallback = varFallback;
+module.exports.builderDependencyRoot = builderDependencyRoot;
