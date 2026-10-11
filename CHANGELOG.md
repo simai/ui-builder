@@ -6,6 +6,17 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Added
 
+- `sf-build` (`bin/sf-build.js`) and its Node API (`libs/api.js`): one entry
+  point for building the Framework (`framework`) and component packages
+  (`package`), the two-wave check alone (`verify package|framework`) and the
+  package receipt (`receipt`); a configurable output path (`--out`, laid
+  atomically and re-hashed against the report and the receipt), a committed
+  configuration file (`sf-build.config.json`, schema
+  `schemas/sf-build.config.v1.schema.json`, with a `package.kind` field of
+  which `components` is built), a JSON result on stdout (`--json`,
+  `simai.sf-build.result.v1`) and stable exit codes. It wraps the existing
+  scripts unchanged; the Framework release route is not affected
+  (`docs/developer/architecture-sf-build.md`).
 - Product component packages (`docs/developer/product-packages.md`): a
   product keeps its own Smart components in a folder of its own repository
   (`framework.lock.json`, `src/smart/<folder>/`, `tests/`), possibly a

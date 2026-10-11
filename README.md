@@ -83,6 +83,53 @@ component package, loaded as `SF_BOOT_CONFIG.packages.<name>`) are built with
 [product runner reference](docs/developer/product-runners.md) for the complete
 contract.
 
+## Using sf-build in a product
+
+`sf-build` is one command line and Node API for building SIMAI Framework and
+its extension packages into an output path of your choice
+([design and status](docs/developer/architecture-sf-build.md)). A product
+(Larena, Docara, an external author) commits `sf-build.config.json`
+([schema](schemas/sf-build.config.v1.schema.json)) beside its package folder:
+
+```json
+{
+  "schema": "simai.sf-build.config.v1",
+  "package": { "name": "acme", "kind": "components", "path": "resources/ui" },
+  "framework": { "source": "../ui-source" },
+  "out": "public/vendor/acme-ui"
+}
+```
+
+The package folder holds `framework.lock.json` and `src/smart/<folder>/`
+([product component packages](docs/developer/product-packages.md)). Then, from
+the product directory, with a ui-builder checkout that has run
+`yarn install --frozen-lockfile`:
+
+```bash
+node /path/to/ui-builder/bin/sf-build.js package --replace-out --json
+```
+
+It builds the committed package twice over the ui-source revision the lock
+pins, requires both waves to be byte-identical, writes the receipt, and lays
+`public/vendor/acme-ui/smart/...`, `package-receipt.json` and
+`package-acme.tar`. Serve `smart/` as `SF_BOOT_CONFIG.packages.acme.base`
+beside the free release, and pin the receipt.
+
+- Options override the file: `--out`, `--ui-source` (or `SF_BUILD_UI_SOURCE`),
+  `--ui` (or `SF_BUILD_UI`, to name the free release in the receipt and check
+  the package against it), `--name`, `--package-root`, `--package-revision`.
+- `--json` prints one result object (`simai.sf-build.result.v1`) on stdout.
+  Exit codes: `0` built, `1` build failed or waves differ, `2` usage,
+  configuration or output conflict, `3` receipt refused, `4` environment.
+- `sf-build verify package` runs the two-wave check alone;
+  `sf-build framework --ui-source <dir> --out <dir>` builds the Framework into
+  the layout the release route publishes; `sf-build --help` lists everything.
+- From Node: `require("<ui-builder>/libs/api").buildPackage({ out, replaceOut: true })`
+  resolves to the same result object.
+
+Requirements: Node.js `>=20.19.0`, git, Python 3 (the receipt), and the Yarn
+cache or network access for the frozen dependency runtimes.
+
 ## Full reproducibility check
 
 The verifier prepares two isolated frozen runtime pairs and builds all four
@@ -136,6 +183,7 @@ that intentionally do not materialize legacy runtime assets.
 - [Architecture and ownership](docs/developer/architecture.md)
 - [Product runner reference](docs/developer/product-runners.md)
 - [Product component packages](docs/developer/product-packages.md)
+- [sf-build: one build tool for the Framework and its packages](docs/developer/architecture-sf-build.md)
 - [Publishing a Framework release](docs/developer/framework-release.md)
 - [Dependency policy](docs/developer/dependency-policy.md)
 - [Icon subset generator](docs/developer/icon-subsets.md)

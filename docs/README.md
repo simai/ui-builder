@@ -15,8 +15,9 @@ for the framework repositories.
 ### Understand or maintain the pipeline
 
 1. [Architecture and ownership](developer/architecture.md)
-2. [Product runner reference](developer/product-runners.md)
-3. [Dependency policy](developer/dependency-policy.md)
+2. [sf-build: one build tool for the Framework and its packages](developer/architecture-sf-build.md)
+3. [Product runner reference](developer/product-runners.md)
+4. [Dependency policy](developer/dependency-policy.md)
 
 ### Publish a release
 
