@@ -53,6 +53,19 @@ without `ui-smart` once no consumer reads it.
    assets `simai/ui@<rev>:distr/smart/...`); on the first v2 release it is
    seeded from the mirror's. The mirror's own manifest is rebound to the mirror
    commit and committed in `ui-smart`.
+   The ui Smart owner manifest lists exactly the Smart components the release
+   ships: a folder in `distr/smart` with its `cl-<folder>` rule of type smart in
+   `distr/rule/rule.json`. A shipped component with no entry gets one, built
+   from its bytes, its rule (tags, declared assets, `requires` from the rule's
+   relations) and its source `src/smart/<name>/smart.manifest.json` (title,
+   lifecycle), with the readiness of a component outside the curated plan:
+   `discoverable`, `safe_to_suggest: false`, `curated_for: []`. The binder
+   refuses a shipped component the source does not describe. An entry whose
+   folder or rule is gone is dropped. Existing entries keep every curated
+   decision; `inventory.expected` is recounted. The binder prints what it added
+   and removed; promoting a new entry into the curated plan stays a deliberate
+   edit by the owner. (ui-9fb0297bb5c2 added `sf-page-header` before this, and
+   its entry was written by hand.)
    Components a package provides (`ui/distr/core/contracts/packages/*.package.json`, source ui-source `src/core/contracts/packages/`;
    SIMAI Framework Pro is the first) leave both Smart owner manifests here,
    in the release that stops shipping their folders: the binder drops their

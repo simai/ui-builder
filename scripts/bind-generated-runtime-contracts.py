@@ -160,6 +160,60 @@ def retire_package_entries(manifest,provided,root,revision,tree):
  return manifest,retired
 
 
+def smart_tree_files(root,revision,tree):
+ """Every file under `tree` at `revision`, relative to the repository root."""
+ return git(root,'ls-tree','-r','--name-only',revision,'--',tree+'/').decode().splitlines()
+
+
+def sync_smart_entries(manifest,ui_root,smart_revision,release,source_root,source_revision,provided,relation_id):
+ """Make the Smart owner manifest list exactly the Smart components the release ships.
+
+ A component ships when its folder is in distr/smart (as of the commit that last
+ wrote it) and its `cl-<folder>` rule of type smart is in distr/rule/rule.json
+ (as of the release). An entry whose component no longer ships is dropped. A
+ shipped component with no entry gets one, built from the bytes, the rule and
+ the source smart.manifest.json, with the readiness a component outside the
+ curated plan has: discoverable, not suggested, curated for nothing. Existing
+ entries, and every curated decision in them, are left as they are; the
+ owner promotes a new entry by hand. inventory.expected is recounted.
+ """
+ files=smart_tree_files(ui_root,smart_revision,SMART_TREE)
+ folders={path[len(SMART_TREE)+1:].split('/',1)[0] for path in files}
+ rules=json.loads(git(ui_root,'show',release+':distr/rule/rule.json'))
+ rule_kinds={rule['name']:rule.get('type','utility') for rule in rules}
+ shipped={rule['name']:rule for rule in rules if rule.get('type')=='smart' and rule['name'].startswith('cl-') and rule['name'][3:] in folders}
+ kept=[entry for entry in manifest['entries'] if entry['runtime'].get('rule_name') in shipped]
+ removed=[entry['id'] for entry in manifest['entries'] if entry['runtime'].get('rule_name') not in shipped]
+ claimed={entry['runtime'].get('rule_name') for entry in kept}
+ added=[]
+ for rule_name in sorted(set(shipped)-claimed):
+  rule=shipped[rule_name];name=rule_name[3:];public_id='smart.'+name
+  if public_id in provided:continue
+  try:source=json.loads(git(source_root,'show',source_revision+':src/smart/'+name+'/smart.manifest.json'))
+  except subprocess.CalledProcessError:
+   raise ValueError(public_id+': distr/smart/'+name+' and '+rule_name+' ship, but the source has no src/smart/'+name+'/smart.manifest.json to describe it')
+  folder=SMART_TREE+'/'+name+'/'
+  # The runtime assets are the files below the component's subfolders (js,
+  # css, template); its own top-level files are metadata, and .gz are copies.
+  assets=sorted((path for path in files if path.startswith(folder) and '/' in path[len(folder):] and not path.endswith('.gz')),key=lambda path:path.split('/'))
+  added.append({
+   'id':public_id,'kind':'smart-component','name':name,'title':source['title'],'owner':UI,'lifecycle':source['lifecycle'],
+   'readiness':{'status':'discoverable','safe_to_suggest':False,'profiles':list(manifest['defaults']['readiness']['profiles']),'blockers':[]},
+   'provenance':{'repository':'https://github.com/simai/ui','tag':None,'commit':smart_revision,
+    'source_refs':[UI+'@'+smart_revision+':'+SMART_TREE+'/'+name,UI+'@'+release+':distr/rule/rule.json#name='+rule_name]},
+   'documentation_refs':[UI+'@'+release+':README.md'],
+   'example_refs':[],
+   'runtime':{'rule_name':rule_name,'tags':list(rule.get('tags',[])),'asset_paths':[UI+'@'+smart_revision+':'+path for path in assets],
+    'declared':{'js':bool(rule.get('js',False)),'css':bool(rule.get('css',False))}},
+   'requires':sorted(relation_id(item['name'],rule_kinds) for item in rule.get('relation',[])),
+   'curated_for':[],
+  })
+ manifest=dict(manifest)
+ manifest['entries']=kept+added
+ manifest['inventory']=dict(manifest['inventory'],expected=len(manifest['entries']))
+ return manifest,[entry['id'] for entry in added],removed
+
+
 def verify(root,item,label):
  """The receipt entry describes exactly this commit of this checkout."""
  revision=item['revision']
@@ -232,6 +286,9 @@ def main():
    else:raise ValueError('no Smart owner manifest in ui and no mirror to seed it from')
    original,retired=retire_package_entries(original,provided,a.ui_root,sources['smart']['revision'],SMART_TREE)
    if retired:print('Retired from the ui Smart owner manifest (provided by a package): '+', '.join(retired))
+   original,added,removed=sync_smart_entries(original,a.ui_root,sources['smart']['revision'],release,a.source_root,receipt['source_revision'],provided,mod.relation_id)
+   if added:print('Added to the ui Smart owner manifest (discoverable, not suggested; promote by hand): '+', '.join(added))
+   if removed:print('Removed from the ui Smart owner manifest (no longer shipped): '+', '.join(removed))
    targets.append((path,original,{UI:smart_bindings},{UI:sources['smart']['revision']},releases['smart'],a.ui_root))
    if 'mirror' in releases:
     path=a.mirror_root/SMART_MANIFEST;original=json.loads(path.read_text())

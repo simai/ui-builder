@@ -184,6 +184,8 @@ const REGISTRY_STUB_V2 = [
     "import re",
     "def validate_manifest_envelope(manifest, kind):",
     "    assert manifest['release']['commit']",
+    "def relation_id(name, rule_kinds):",
+    "    return 'smart.' + name[3:] if name.startswith('cl-') else rule_kinds[name] + '.' + name",
     "def validate_lock(lock):",
     "    if lock['schema_version'] == 2:",
     "        assert re.fullmatch(r'ui-[0-9a-f]{12}', lock['compatibility_id'])",
@@ -208,6 +210,8 @@ function smartManifest(revision, coreRevision)
     manifest.inventory = { source: `simai/ui-smart@${revision}:smart`, selector: "*/js/*.js", expected: 1 };
     manifest.entries[0].provenance.source_refs.push(`simai/ui@${coreRevision}:distr/rule/rule.json#name=cl-thing`);
     manifest.entries[0].documentation_refs = [`simai/ui-smart@${revision}:README.md`];
+    manifest.entries[0].runtime.rule_name = "cl-thing";
+    manifest.defaults = { lifecycle: "released", readiness: { status: "discoverable", safe_to_suggest: false, profiles: ["plain-assets-v1"], blockers: [] } };
     return manifest;
 }
 
@@ -234,13 +238,19 @@ function v2Fixture()
     return { workspace, uiRoot, mirrorRoot, sourceRoot };
 }
 
+// The Smart rules a build lays into distr/rule/rule.json.
+const THING_RULE = { name: "cl-thing", type: "smart", mode: "smart", js: true, tags: ["sf-thing"] };
+
 // What publish-framework-release.sh does around the binder, step for step.
-function publish(context, coreBytes, smartBytes)
+function publish(context, coreBytes, smartBytes, rules = [THING_RULE])
 {
     writeFile(context.uiRoot, "distr/core/core.css", coreBytes);
+    writeFile(context.uiRoot, "distr/rule/rule.json", `${JSON.stringify(rules, null, 2)}\n`);
     writeFile(context.uiRoot, "distr/smart/thing/js/thing.js", smartBytes);
     const release = commitAll(context.uiRoot, "Build");
-    writeFile(context.mirrorRoot, "smart/thing/js/thing.js", smartBytes);
+    // The mirror receives distr/smart as it is (rsync --delete).
+    fs.rmSync(path.join(context.mirrorRoot, "smart"), { recursive: true, force: true });
+    fs.cpSync(path.join(context.uiRoot, "distr/smart"), path.join(context.mirrorRoot, "smart"), { recursive: true });
     if (git(context.mirrorRoot, "status", "--porcelain")) commitAll(context.mirrorRoot, "Build");
     const receipt = path.join(context.workspace, `receipt-${release.slice(0, 12)}.json`);
     execFileSync("python3", [RECEIPT_TOOL, "--ui-root", context.uiRoot, "--mirror-root", context.mirrorRoot, "--source-root", context.sourceRoot, "--output", receipt]);
@@ -248,13 +258,14 @@ function publish(context, coreBytes, smartBytes)
         TOOL, "--ui-root", context.uiRoot, "--smart-root", context.uiRoot, "--mirror-root", context.mirrorRoot,
         "--receipt", receipt, "--source-root", context.sourceRoot, "--phase", phase,
     ], { encoding: "utf8" });
-    bind("owners");
+    const said = bind("owners");
     if (git(context.mirrorRoot, "status", "--porcelain")) commitAll(context.mirrorRoot, "Bind Smart metadata");
     const written = JSON.parse(bind("reference").trim().split("\n").pop());
     commitAll(context.uiRoot, "Bind the registry");
     const read = (root, file) => JSON.parse(fs.readFileSync(path.join(root, file), "utf8"));
     return {
         release,
+        said,
         receipt: read(context.workspace, path.basename(receipt)),
         written,
         lock: read(context.uiRoot, `contracts/releases/${written.compatibility_id}.lock.json`),
@@ -407,6 +418,7 @@ function publishWithout(context, paidPresent)
     writeFile(context.uiRoot, "distr/core/contracts/packages/pro.package.json", `${JSON.stringify({provides: [{id: "smart-component.paid", element: "sf-paid", rule_name: "cl-paid", folder: "paid", requires: []}]})}\n`);
     commitAll(context.uiRoot, "name the package");
     writeFile(context.uiRoot, "distr/core/core.css", "core-2\n");
+    writeFile(context.uiRoot, "distr/rule/rule.json", `${JSON.stringify([THING_RULE], null, 2)}\n`);
     writeFile(context.uiRoot, "distr/smart/thing/js/thing.js", "smart-1\n");
     if (paidPresent) writeFile(context.uiRoot, "distr/smart/paid/js/paid.js", "paid\n");
     else fs.rmSync(path.join(context.mirrorRoot, "smart/paid"), { recursive: true, force: true });
@@ -440,5 +452,111 @@ test("v2: a package component whose folder is still in the release stops the bin
     withPaidComponent(context);
     // The mirror keeps smart/paid: the free release would still ship it.
     assert.throws(() => publishWithout(context, true), (error) => /smart-component\.paid: a package provides it, but (distr\/)?smart\/paid is still in the release/u.test(String(error.stderr || error.message)));
+    fs.rmSync(context.workspace, { recursive: true, force: true });
+});
+
+// The Smart owner manifest follows what the release ships: a component the
+// build adds gets an entry (ui-9fb0297bb5c2 added sf-page-header and the gate
+// stopped on smart_rule_count_mismatch until one was written by hand), and a
+// component the build drops loses its entry.
+const NEW_RULE = { name: "cl-new-thing", type: "smart", mode: "smart", js: true, css: true, tags: ["sf-new-thing"], relation: [{ name: "cl-thing" }, { name: "buttons" }] };
+
+function addNewThing(context)
+{
+    writeFile(context.sourceRoot, "src/smart/new-thing/smart.manifest.json", `${JSON.stringify({ id: "smart.new-thing", title: "New thing", lifecycle: "experimental" }, null, 2)}\n`);
+    commitAll(context.sourceRoot, "describe new-thing");
+    for (const file of ["js/new-thing.js", "js/new-thing.js.gz", "css/new-thing.css", "template/default/index.html", "template/default.js", "smart.manifest.json", "studio.fixture.json"]) {
+        writeFile(context.uiRoot, `distr/smart/new-thing/${file}`, `${file}\n`);
+    }
+}
+
+test("v2: a Smart component the release adds gets a discoverable entry", () => {
+    const context = v2Fixture();
+    const first = publish(context, "core-1\n", "smart-1\n");
+    addNewThing(context);
+    const second = publish(context, "core-2\n", "smart-1\n", [THING_RULE, NEW_RULE, { name: "buttons", type: "component" }]);
+    const release = second.release;
+
+    assert.deepEqual(second.smart.entries.map(({ id }) => id), ["smart-component.thing", "smart.new-thing"], "appended; the existing entry stays first");
+    assert.equal(second.smart.inventory.expected, 2);
+    assert.equal(second.lock.inventory.smart_components, 2, "the lock reads the recounted manifest");
+    assert.deepEqual(second.smart.entries[0], JSON.parse(JSON.stringify(first.smart.entries[0]).replaceAll(first.release, release)), "the existing entry is only rebound");
+    assert.deepEqual(second.smart.entries[1], {
+        id: "smart.new-thing",
+        kind: "smart-component",
+        name: "new-thing",
+        title: "New thing",
+        owner: "simai/ui",
+        lifecycle: "experimental",
+        readiness: { status: "discoverable", safe_to_suggest: false, profiles: ["plain-assets-v1"], blockers: [] },
+        provenance: {
+            repository: "https://github.com/simai/ui",
+            tag: null,
+            commit: release,
+            source_refs: [`simai/ui@${release}:distr/smart/new-thing`, `simai/ui@${release}:distr/rule/rule.json#name=cl-new-thing`],
+        },
+        documentation_refs: [`simai/ui@${release}:README.md`],
+        example_refs: [],
+        runtime: {
+            rule_name: "cl-new-thing",
+            tags: ["sf-new-thing"],
+            // Below the component's subfolders, no .gz, ordered as the registry orders paths.
+            asset_paths: ["css/new-thing.css", "js/new-thing.js", "template/default/index.html", "template/default.js"]
+                .map((file) => `simai/ui@${release}:distr/smart/new-thing/${file}`),
+            declared: { js: true, css: true },
+        },
+        requires: ["component.buttons", "smart.thing"],
+        curated_for: [],
+    });
+    fs.rmSync(context.workspace, { recursive: true, force: true });
+});
+
+test("v2: the binder says what it added and removed", () => {
+    const context = v2Fixture();
+    publish(context, "core-1\n", "smart-1\n");
+    addNewThing(context);
+    const added = publish(context, "core-2\n", "smart-1\n", [THING_RULE, NEW_RULE, { name: "buttons", type: "component" }]);
+    assert.match(added.said, /Added to the ui Smart owner manifest \(discoverable, not suggested; promote by hand\): smart\.new-thing/u);
+    assert.doesNotMatch(added.said, /Removed from/u);
+    fs.rmSync(path.join(context.uiRoot, "distr/smart/new-thing"), { recursive: true, force: true });
+    const removed = publish(context, "core-3\n", "smart-2\n");
+    assert.match(removed.said, /Removed from the ui Smart owner manifest \(no longer shipped\): smart\.new-thing/u);
+    assert.doesNotMatch(removed.said, /Added to/u);
+    fs.rmSync(context.workspace, { recursive: true, force: true });
+});
+
+test("v2: a Smart component the release drops loses its entry", () => {
+    const context = v2Fixture();
+    addNewThing(context);
+    const first = publish(context, "core-1\n", "smart-1\n", [THING_RULE, NEW_RULE, { name: "buttons", type: "component" }]);
+    assert.equal(first.smart.inventory.expected, 2);
+    // The build drops new-thing: its folder and its rule are gone.
+    fs.rmSync(path.join(context.uiRoot, "distr/smart/new-thing"), { recursive: true, force: true });
+    const second = publish(context, "core-2\n", "smart-2\n");
+
+    assert.deepEqual(second.smart.entries.map(({ id }) => id), ["smart-component.thing"]);
+    assert.equal(second.smart.inventory.expected, 1);
+    assert.equal(second.lock.inventory.smart_components, 1);
+    fs.rmSync(context.workspace, { recursive: true, force: true });
+});
+
+test("v2: a component whose rule is gone loses its entry even if its folder stays", () => {
+    const context = v2Fixture();
+    const first = publish(context, "core-1\n", "smart-1\n");
+    assert.equal(first.smart.entries.length, 1);
+    addNewThing(context);
+    const second = publish(context, "core-2\n", "smart-1\n", [NEW_RULE, { name: "buttons", type: "component" }]);
+    assert.deepEqual(second.smart.entries.map(({ id }) => id), ["smart.new-thing"]);
+    assert.equal(second.smart.inventory.expected, 1);
+    fs.rmSync(context.workspace, { recursive: true, force: true });
+});
+
+test("v2: a shipped component the source does not describe stops the binding", () => {
+    const context = v2Fixture();
+    writeFile(context.uiRoot, "distr/smart/new-thing/js/new-thing.js", "js\n");
+    assert.throws(
+        () => publish(context, "core-1\n", "smart-1\n", [THING_RULE, NEW_RULE, { name: "buttons", type: "component" }]),
+        (error) => /smart\.new-thing: distr\/smart\/new-thing and cl-new-thing ship, but the source has no src\/smart\/new-thing\/smart\.manifest\.json/u.test(String(error.stderr || error.message)),
+    );
     fs.rmSync(context.workspace, { recursive: true, force: true });
 });
