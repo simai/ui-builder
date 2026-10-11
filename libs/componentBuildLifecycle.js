@@ -16,9 +16,13 @@ const {
     validateLegacyRuntimeCompatibility,
 } = require("./legacyRuntimeCompatibility");
 const {
-    PRO_COMPONENTS,
-    materializeProPackageRule,
+    PRO_PACKAGE_DEFINITION,
 } = require("./proProduct");
+const {
+    COMPONENT_FOLDER,
+    assertPackageName,
+    materializePackageRule,
+} = require("./packageProduct");
 const {
     createPostcssPlugins,
 } = require("./postcssPolicy");
@@ -165,14 +169,44 @@ const SMART_PROFILE = Object.freeze({
 // at a pinned revision with ui-source-pro laid over it), keeping only the Pro
 // component entries, and the package rule file (smart/rule.js) written before
 // packaging so it is normalized and gzipped like every other output file.
-const PRO_PROFILE = Object.freeze({
-    configurationPoliciesByTarget: SMART_CONFIGURATION_POLICIES,
-    entryFilter: Object.freeze(PRO_COMPONENTS.map(name => `smart/${name}`)),
-    label: "pro",
-    packageRule: true,
-    sassResourcesByTarget: SMART_SASS_RESOURCES,
-    targets: SMART_TARGETS,
-});
+// A product component package is the same profile for any package: the
+// Smart target over an overlay, its own folders, its own rule file.
+function packageProfile(pkg, label = `package ${pkg.name}`)
+{
+    return Object.freeze({
+        configurationPoliciesByTarget: SMART_CONFIGURATION_POLICIES,
+        entryFilter: Object.freeze(pkg.components.map(name => `smart/${name}`)),
+        label,
+        packageRule: pkg,
+        sassResourcesByTarget: SMART_SASS_RESOURCES,
+        targets: SMART_TARGETS,
+    });
+}
+
+const PRO_PROFILE = packageProfile(PRO_PACKAGE_DEFINITION, "pro");
+
+function validatePackageDefinition(value)
+{
+    if (!value || typeof value !== "object" || Array.isArray(value))
+    {
+        throw new TypeError("options.package must be {name, components}");
+    }
+
+    assertPackageName(value.name);
+
+    if (!Array.isArray(value.components)
+        || value.components.length === 0
+        || value.components.some(name => typeof name !== "string" || !COMPONENT_FOLDER.test(name))
+        || new Set(value.components).size !== value.components.length)
+    {
+        throw new TypeError("options.package.components must be distinct component folder names");
+    }
+
+    return Object.freeze({
+        components: Object.freeze([...value.components].sort()),
+        name: value.name,
+    });
+}
 
 function messageFrom(value, fallback)
 {
@@ -855,7 +889,7 @@ async function runBuild(options, runtime, profile)
 
         if (profile.packageRule)
         {
-            materializeProPackageRule(definition.plan);
+            materializePackageRule(definition.plan, profile.packageRule);
         }
 
         materializeGeneratedPackaging(definition.plan);
@@ -900,9 +934,35 @@ function runProBuild(options, runtime)
     return runBuild(options, runtime, PRO_PROFILE);
 }
 
+async function runPackageBuild(options, runtime)
+{
+    let profile;
+
+    try
+    {
+        profile = packageProfile(validatePackageDefinition(options && options.package));
+    }
+    catch (error)
+    {
+        reportDiagnostic(
+            usageReporter(runtime),
+            "usage",
+            error,
+            "invalid lifecycle usage",
+        );
+
+        return 2;
+    }
+
+    const { package: _package, ...rest } = options;
+
+    return runBuild(rest, runtime, profile);
+}
+
 module.exports = {
     runComponentBuild,
     runCoreBuild,
+    runPackageBuild,
     runProBuild,
     runSmartBuild,
     runUtilityBuild,
