@@ -77,8 +77,34 @@ node scripts/run-smart-product-build.cjs \
   /absolute/path/to/smart-diagnostics.json
 ```
 
-## Pro
+## Product package
 
+A product component package (`docs/developer/product-packages.md`). The source
+root is the `src` of a package overlay: ui-source at the revision the package
+pins, with the package's `src/`, `tests/` and `docs/` laid over it
+(`libs/packageProduct.js`, `materializePackageOverlay`). The package name and
+its component folders are passed as options:
+
+```bash
+node scripts/run-package-product-build.cjs \
+  --package larena --components admin-menu,data-view,property-view,table \
+  /absolute/path/to/ui-builder \
+  /absolute/path/to/package-overlay/src \
+  /absolute/path/to/new-package-output \
+  /absolute/path/to/package-diagnostics.json
+```
+
+The Smart lifecycle runs with an entry filter that keeps only the given folders
+(an absent one fails the plan), and writes `smart/rule.js`, the package rule
+file registering `<name>`, before packaging. Output: `<out>/smart/<folder>/...`
+and `<out>/smart/rule.js` (+ `.gz`), nothing else. A missing or malformed
+`--package`/`--components` is an invocation failure (`PACKAGE_REQUIRED`) or a
+usage diagnostic. `scripts/verify-package-reproducibility.cjs` lays the overlay
+and runs this twice.
+
+## Pro (deprecated)
+
+Superseded by the product package above; kept until ui-source-pro is archived.
 SIMAI Framework Pro (`docs/developer/pro-release.md`). The source root is the
 `src` of a Pro overlay: ui-source at the revision ui-source-pro pins, with
 ui-source-pro laid over it (`libs/proProduct.js`, `materializeProOverlay`).

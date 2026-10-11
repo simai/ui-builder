@@ -75,7 +75,11 @@ node scripts/run-component-utility-product-build.cjs \
 ```
 
 Core and Smart use `run-core-product-build.cjs` and
-`run-smart-product-build.cjs`. See the
+`run-smart-product-build.cjs`. A product's own Smart components (a product
+component package, loaded as `SF_BOOT_CONFIG.packages.<name>`) are built with
+`verify-package-reproducibility.cjs` and pinned by the receipt of
+`write-package-receipt.py`; see
+[product component packages](docs/developer/product-packages.md). See the
 [product runner reference](docs/developer/product-runners.md) for the complete
 contract.
 
@@ -131,6 +135,8 @@ that intentionally do not materialize legacy runtime assets.
 - [Getting started](docs/developer/getting-started.md)
 - [Architecture and ownership](docs/developer/architecture.md)
 - [Product runner reference](docs/developer/product-runners.md)
+- [Product component packages](docs/developer/product-packages.md)
+- [Publishing a Framework release](docs/developer/framework-release.md)
 - [Dependency policy](docs/developer/dependency-policy.md)
 - [Icon subset generator](docs/developer/icon-subsets.md)
 - [Migration from the legacy builder](docs/developer/migration-from-sf5-webpack.md)

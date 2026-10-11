@@ -1,5 +1,13 @@
 # Publishing a SIMAI Framework Pro release
 
+> **Superseded.** SIMAI Framework Pro is dropped (owner decision of
+> 2026-10-11): product components live in the product, and are built as a
+> product component package (`product-packages.md`) shipped inside the
+> product's own distribution, with a package receipt instead of a release in
+> `ui-pro`. The Pro scripts below still work, unchanged, until `ui-source-pro`
+> moves into Larena and `ui-source-pro` and `ui-pro` are archived; nothing is
+> released from `ui-pro` after that move.
+
 SIMAI Framework Pro is four Smart components (`sf-table`, `sf-data-view`,
 `sf-property-view`, `sf-admin-menu`) whose source is the private
 `ui-source-pro` and whose distribution is the private `ui-pro`. They run on the

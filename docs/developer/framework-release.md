@@ -86,10 +86,13 @@ without `ui-smart` once no consumer reads it.
 `runtime_tree` and `archive_sha256` describe the commit that wrote each tree, as
 in v1. `mirror` and `pair` are present only while `ui-smart` is mirrored.
 
-## SIMAI Framework Pro
+## Product component packages
 
-Pro is released separately, into `ui-pro`, after the free release it was built
-and tested against: `docs/developer/pro-release.md`.
+A product's own Smart components are built over the ui-source revision a free
+release was built from, and pinned by a package receipt that names that
+release: `docs/developer/product-packages.md`. Release the free Framework
+first. (SIMAI Framework Pro, released into `ui-pro`, is superseded:
+`docs/developer/pro-release.md`.)
 
 ## Rollback
 

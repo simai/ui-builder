@@ -21,6 +21,10 @@ for the framework repositories.
 ### Publish a release
 
 - [Publishing a Framework release](developer/framework-release.md)
+- [Product component packages](developer/product-packages.md): a product's own
+  Smart components, built over a pinned Framework revision, with a receipt
+- [Publishing a SIMAI Framework Pro release](developer/pro-release.md)
+  (superseded by product component packages)
 
 ### Review the migration provenance
 

@@ -6,6 +6,18 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Added
 
+- Product component packages (`docs/developer/product-packages.md`): a
+  product keeps its own Smart components in a folder of its own repository
+  (`framework.lock.json`, `src/smart/<folder>/`, `tests/`), possibly a
+  subdirectory of a larger one; `verify-package-reproducibility.cjs --package
+  <name>` builds it over the pinned ui-source revision in two byte-identical
+  waves (`run-package-product-build.cjs`), with a package rule file
+  `SF.RuleLoader.registerPackage('<name>', {rules})`;
+  `write-package-receipt.py` writes `package-receipt.json`
+  (`simai.framework.product-package-receipt` v1) and a deterministic tar of the
+  output, resolves the free release built from the pinned revision and checks
+  the rules against it and against the package reference for that name.
+
 - SIMAI Framework Pro as a product: `run-pro-product-build.cjs` builds the four
   Pro Smart components from an overlay (ui-source at the revision
   ui-source-pro pins, with ui-source-pro laid over it) and writes the package
@@ -30,6 +42,12 @@ All notable changes to `ui-builder` are documented in this file.
 - Explicit modern `build:*` commands while preserving legacy aliases.
 - An English-first contribution and documentation policy for international
   maintainers.
+
+### Deprecated
+
+- SIMAI Framework Pro is superseded by product component packages. Its scripts
+  are unchanged and keep building `ui-source-pro` into `ui-pro` until the move;
+  `libs/proProduct.js` is now the generic package build with the name `pro`.
 
 ### Changed
 
