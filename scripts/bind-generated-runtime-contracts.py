@@ -183,6 +183,14 @@ def sync_smart_entries(manifest,ui_root,smart_revision,release,source_root,sourc
  rule_kinds={rule['name']:rule.get('type','utility') for rule in rules}
  shipped={rule['name']:rule for rule in rules if rule.get('type')=='smart' and rule['name'].startswith('cl-') and rule['name'][3:] in folders}
  kept=[entry for entry in manifest['entries'] if entry['runtime'].get('rule_name') in shipped]
+ # The runtime assets are a fact of the bytes, not a curated decision: they are
+ # recounted for a kept entry as for a new one. Kept as written, they named
+ # files a release no longer ships -- the licence notes went when the Smart
+ # bundles stopped carrying lit (shared runtime, 2026-10-13).
+ def assets_of(name):
+  folder=SMART_TREE+'/'+name+'/'
+  return sorted((path for path in files if path.startswith(folder) and '/' in path[len(folder):] and not path.endswith('.gz')),key=lambda path:path.split('/'))
+ kept=[{**entry,'runtime':{**entry['runtime'],'asset_paths':[UI+'@'+smart_revision+':'+path for path in assets_of(entry['runtime']['rule_name'][3:])]}} for entry in kept]
  removed=[entry['id'] for entry in manifest['entries'] if entry['runtime'].get('rule_name') not in shipped]
  claimed={entry['runtime'].get('rule_name') for entry in kept}
  added=[]
@@ -192,10 +200,9 @@ def sync_smart_entries(manifest,ui_root,smart_revision,release,source_root,sourc
   try:source=json.loads(git(source_root,'show',source_revision+':src/smart/'+name+'/smart.manifest.json'))
   except subprocess.CalledProcessError:
    raise ValueError(public_id+': distr/smart/'+name+' and '+rule_name+' ship, but the source has no src/smart/'+name+'/smart.manifest.json to describe it')
-  folder=SMART_TREE+'/'+name+'/'
   # The runtime assets are the files below the component's subfolders (js,
   # css, template); its own top-level files are metadata, and .gz are copies.
-  assets=sorted((path for path in files if path.startswith(folder) and '/' in path[len(folder):] and not path.endswith('.gz')),key=lambda path:path.split('/'))
+  assets=assets_of(name)
   added.append({
    'id':public_id,'kind':'smart-component','name':name,'title':source['title'],'owner':UI,'lifecycle':source['lifecycle'],
    'readiness':{'status':'discoverable','safe_to_suggest':False,'profiles':list(manifest['defaults']['readiness']['profiles']),'blockers':[]},
