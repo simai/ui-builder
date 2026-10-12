@@ -7,6 +7,7 @@ const { createRequire } = require("node:module");
 const {
     configureProductConfigurations,
 } = require("../libs/productWebpackRuntime");
+const { applySharedRuntimeExternals } = require("../libs/sharedRuntime");
 const { compatibilityFromEnvironment } = require("../libs/legacyRuntimeCompatibility");
 
 const ARGUMENT_NAMES = Object.freeze([
@@ -120,6 +121,9 @@ if (usage)
             sourceDependencyRoot,
             sourceRoot,
         });
+        // Smart elements take lit and smart-base from the shared runtime Core
+        // loads once per page, instead of a copy each.
+        applySharedRuntimeExternals(configurations, { sourceRoot });
         const compiler = webpackImplementation(configurations);
         const run = compiler.run;
 

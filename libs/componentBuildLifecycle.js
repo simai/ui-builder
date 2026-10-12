@@ -69,6 +69,9 @@ const CORE_TARGET = Object.freeze({
     fixedEntries: Object.freeze([
         Object.freeze({ key: "core", file: "index.js", output: "core" }),
         Object.freeze({ key: "rule", file: "rule.js", output: "rule" }),
+        // The shared Smart runtime, beside core.js (2026-10-13). Optional:
+        // a source from before it has none, and builds as it did.
+        Object.freeze({ key: "smart-base", file: "smart-base.js", output: "core", optional: true, sharesOutput: true }),
         Object.freeze({
             key: "utility.full",
             file: "utility-full.js",

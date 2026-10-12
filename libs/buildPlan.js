@@ -17,6 +17,9 @@ const DEFAULT_TARGETS = Object.freeze([
         fixedEntries: Object.freeze([
             Object.freeze({ key: "core", file: "index.js", output: "core" }),
             Object.freeze({ key: "rule", file: "rule.js", output: "rule" }),
+            // The shared Smart runtime, beside core.js (2026-10-13). Optional:
+            // a source from before it has none, and builds as it did.
+            Object.freeze({ key: "smart-base", file: "smart-base.js", output: "core", optional: true, sharesOutput: true }),
         ]),
     }),
     Object.freeze({
@@ -375,6 +378,8 @@ function normalizeTargets(targets)
                         entry.file,
                         `targets[${targetIndex}].fixedEntries[${entryIndex}].file`,
                     ),
+                    optional: entry.optional === true,
+                    sharesOutput: entry.sharesOutput === true,
                     key: entry.key,
                     output: normalizeRelativePath(
                         entry.output || entry.key,
@@ -637,7 +642,13 @@ function createBuildPlan(options)
             throw new Error(`duplicate entry key: ${entry.key}`);
         }
 
-        claimDestination(entry.outputDirectory, "entry");
+        // An entry that declares it shares its directory writes files named by
+        // its own key beside another entry's (the Smart runtime beside core.js);
+        // every other entry keeps a directory to itself.
+        if (!entry.sharesOutput)
+        {
+            claimDestination(entry.outputDirectory, "entry");
+        }
         seenEntryKeys.add(keyIdentity);
         entries.push(entry);
     }
@@ -667,6 +678,10 @@ function createBuildPlan(options)
             for (const fixedEntry of target.fixedEntries)
             {
                 const input = path.join(targetPath, fixedEntry.file);
+                if (fixedEntry.optional && !fs.existsSync(input))
+                {
+                    continue;
+                }
                 const inputInspection = inspectPath(
                     input,
                     sourceRoot,
@@ -681,6 +696,7 @@ function createBuildPlan(options)
                 addEntry({
                     input: inputInspection.realPath,
                     key: fixedEntry.key,
+                    sharesOutput: fixedEntry.sharesOutput,
                     outputDirectory: resolveOutputPath(
                         outputRoot,
                         [target.outputPrefix, fixedEntry.output].filter(Boolean),
