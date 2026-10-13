@@ -20,6 +20,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
+const { undeclaredRelations } = require("./packageRelations");
 
 const {
     CONFIG_FILE_NAME,
@@ -583,6 +584,8 @@ async function packageFlow(command, options)
             ]);
         }
 
+        // Read from the source, so a warning, not a refusal: see packageRelations.js.
+        const relationWarnings = undeclaredRelations(resolved);
         workspace = newWorkspace(resolved.workspace);
         const report = await runPackageVerifier(resolved, workspace);
         const summary = {
@@ -607,6 +610,7 @@ async function packageFlow(command, options)
             return result(command, {
                 ...summary,
                 target: "package",
+                warnings: relationWarnings,
                 workspace: { kept, report: kept ? path.join(workspace.root, "report.json") : null, root: workspace.root },
             });
         }
@@ -633,7 +637,7 @@ async function packageFlow(command, options)
                 archive_sha256: receipt.output.archive_sha256,
             },
             package_reference: receipt.package_reference.status,
-            warnings: receiptFiles.warnings,
+            warnings: [...relationWarnings, ...(receiptFiles.warnings || [])],
             workspace: {
                 kept,
                 receipt: kept ? receiptFiles.receiptPath : null,

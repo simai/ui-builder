@@ -201,6 +201,16 @@ failure; it resolves to that object.
 Without `--json`, progress lines go to stderr and a short summary to stdout.
 The API takes `onProgress(message)` instead.
 
+`warnings` of a package build (and of `verify package`) include every Framework
+element a component draws without a relation to the rule that loads it, read
+from the component's source (libs/packageRelations.js): a tag in a template,
+an element made with `createElement` / `SF.create`, or a descriptor
+`component: {type: 'icon-button'}`. Such an element upgrades only when
+something else on the page pulled its rule in, so it may render before its
+styles arrive. An element the component fetches itself
+(`SF.Loader.ensureSmartElementLoaded('sf-radio')`) is not reported. A warning
+does not fail the build.
+
 ### Node API
 
 ```js
