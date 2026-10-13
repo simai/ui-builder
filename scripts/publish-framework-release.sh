@@ -9,7 +9,7 @@
 #     --ui <ui checkout> --source <ui-source checkout> \
 #     [--mirror <ui-smart checkout> | --no-mirror] \
 #     --subject "<what the release changes>" \
-#     --changelog-entry <file> [--changelog-section <### heading, default Изменено>] \
+#     --changelog-entry <file> [--changelog-section <### heading; default: the first one under [Unreleased]>] \
 #     [--builder-revision <ui-builder commit that built the output, default HEAD>] \
 #     [--work <directory for the receipt, default a new temporary one>] \
 #     [--trailer "<last paragraph of every commit message, e.g. a Co-Authored-By line>"]
@@ -33,7 +33,7 @@
 set -euo pipefail
 
 BUILDER_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OUTPUT='' UI='' MIRROR='' SOURCE='' SUBJECT='' ENTRY='' SECTION='Изменено' BUILDER_REVISION='' WORK='' NO_MIRROR=0 TRAILER=
+OUTPUT='' UI='' MIRROR='' SOURCE='' SUBJECT='' ENTRY='' SECTION='' BUILDER_REVISION='' WORK='' NO_MIRROR=0 TRAILER=
 while [ $# -gt 0 ]; do
     case "$1" in
         --output) OUTPUT="$2"; shift 2 ;;
@@ -139,9 +139,16 @@ path, entry_path, section = sys.argv[1:4]
 text = open(path, encoding='utf-8-sig').read()
 entry = open(entry_path, encoding='utf-8').read()
 unreleased = text.index('## [Unreleased]')
+following = text.find('\n## ', unreleased + 1)
+# The section names are the changelog's own, in its own language; without
+# one named, the entry goes under the first section of [Unreleased].
+if not section:
+    first = text.find('\n### ', unreleased)
+    if first == -1 or (following != -1 and first > following):
+        raise SystemExit('CHANGELOG.md has no ### section under [Unreleased]; name one with --changelog-section')
+    section = text[first + 5:text.index('\n', first + 1)].strip()
 heading = f'### {section}\n'
 at = text.find(heading, unreleased)
-following = text.find('\n## ', unreleased + 1)
 if at == -1 or (following != -1 and at > following):
     raise SystemExit(f'CHANGELOG.md has no "{heading.strip()}" under [Unreleased]')
 at += len(heading) + 1

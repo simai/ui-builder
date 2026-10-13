@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Deterministic Webpack build system for SIMAI Framework Core, Component, Utility, and Smart layers",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/simai/ui-builder.git"

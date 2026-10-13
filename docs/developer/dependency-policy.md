@@ -57,5 +57,4 @@ Every dependency update is a separate candidate and must:
 6. receive independent acceptance for the exact commit and Git tree;
 7. update generated distributions only in a separately authorized step.
 
-Never combine a toolchain upgrade with an unreviewed publication to `ui` or
-`ui-smart`.
+Never combine a toolchain upgrade with an unreviewed publication to `ui`.

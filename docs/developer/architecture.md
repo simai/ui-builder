@@ -6,8 +6,8 @@
 | --- | --- | --- |
 | Framework source | `simai/ui-source` | Canonical SCSS, JavaScript, templates, and metadata for Core, Component, Utility, and Smart |
 | Build system | `simai/ui-builder` | Build planning, Webpack configuration, deterministic lifecycle, diagnostics, and packaging |
-| Core and Component distribution | `simai/ui` | Generated output |
-| Smart distribution | `simai/ui-smart` | Generated output |
+| Distribution (Core, Component, Utility, Smart) | `simai/ui` | Generated output |
+| Former Smart distribution | `simai/ui-smart` | Retired; an optional mirror of `ui/distr/smart` for old readers |
 
 Generated repositories are never the source of a fix. A change starts in
 `ui-source` or `ui-builder`; distributions are updated only through a

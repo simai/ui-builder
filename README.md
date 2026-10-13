@@ -5,8 +5,9 @@ Utility, and Smart layers of [SIMAI Framework](https://github.com/simai).
 
 The repository owns build planning, Webpack configuration, deterministic module
 and chunk identifiers, asset packaging, and reproducibility verification. The
-framework source remains in `simai/ui-source`; `simai/ui` and `simai/ui-smart`
-are generated distributions and must not be edited as source code.
+framework source is `simai/ui-source`; `simai/ui` is the one generated
+distribution -- Core, Component, Utility and Smart under `distr/` -- and must
+not be edited as source code.
 
 ## Requirements
 
@@ -143,8 +144,8 @@ node scripts/verify-product-reproducibility.cjs \
 
 It succeeds only when the Core, Component, Utility, and Smart manifests are
 byte-identical between both waves. Evidence is written to
-`<workspace>/report.json`. Existing `ui` and `ui-smart` checkouts are not
-required and are not modified.
+`<workspace>/report.json`. An existing `ui` checkout is not required and is not
+modified.
 
 When a release must retain digest-bound runtime assets from accepted historical
 distributions, first materialize their manifest-defined records into one
@@ -173,7 +174,7 @@ that intentionally do not materialize legacy runtime assets.
   requests.
 - **Product reproducibility** is a manually dispatched workflow that accepts an
   exact `ui-source` branch, tag, or commit and stores both build waves as an
-  artifact. A private `simai/ui-source` checkout requires the
+  artifact. Building from a private fork of `ui-source` requires the
   `UI_LOADER_READ_TOKEN` repository secret with read-only Contents access.
 
 ## Documentation
@@ -192,3 +193,11 @@ that intentionally do not materialize legacy runtime assets.
 
 Builder verification alone is not a claim of complete LTR/RTL readiness. That
 claim requires independent acceptance of the framework component matrix.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for how to report a vulnerability.
+
+## License
+
+Apache License, Version 2.0 -- see [LICENSE](LICENSE) and [NOTICE](NOTICE).
