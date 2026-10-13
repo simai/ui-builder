@@ -57,3 +57,37 @@ test("the builder's ids are the runtime's keys, when ui-source sits beside it", 
     const keys = [...fs.readFileSync(runtime, "utf8").matchAll(/^\s+"([^"]+)": asModule\(/gmu)].map((match) => match[1]);
     assert.deepEqual([...keys].sort(), [...BARE_MODULES, ...Object.keys(CORE_MODULES)].sort());
 });
+
+// A name imported from a runtime module is read off the namespace Core hands
+// over, in the browser; one the module does not export was undefined at run
+// time and no build said so. The build now fails on it.
+test("an import of a name a runtime module does not export fails the build", async () => {
+    const os = require("node:os");
+    const webpack = require("webpack");
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "sf-runtime-exports-")));
+    try
+    {
+        fs.mkdirSync(path.join(root, "core", "js"), { recursive: true });
+        fs.mkdirSync(path.join(root, "smart", "x"), { recursive: true });
+        fs.writeFileSync(path.join(root, "core", "js", "page-language.js"), "export function pageText() { return ''; }\n");
+        const entry = path.join(root, "smart", "x", "index.js");
+        const compile = (source) => new Promise((resolve, reject) => {
+            fs.writeFileSync(entry, source);
+            const [configuration] = applySharedRuntimeExternals([{
+                mode: "none",
+                context: root,
+                entry,
+                output: { path: path.join(root, "out"), filename: "x.js" },
+            }], { sourceRoot: root });
+            webpack(configuration, (error, stats) => (error ? reject(error) : resolve(stats.toJson({ all: false, errors: true }).errors.map((item) => item.message))));
+        });
+        assert.deepEqual(await compile("import {pageText} from '../../core/js/page-language';\nconsole.log(pageText);\n"), []);
+        const errors = await compile("import {pageText, pageWords} from '../../core/js/page-language';\nconsole.log(pageText, pageWords);\n");
+        assert.equal(errors.length, 1);
+        assert.match(errors[0], /imports "pageWords" from the runtime module "page-language", which does not export it/);
+    }
+    finally
+    {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
