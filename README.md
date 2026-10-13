@@ -174,8 +174,10 @@ that intentionally do not materialize legacy runtime assets.
   requests.
 - **Product reproducibility** is a manually dispatched workflow that accepts an
   exact `ui-source` branch, tag, or commit and stores both build waves as an
-  artifact. Building from a private fork of `ui-source` requires the
-  `UI_LOADER_READ_TOKEN` repository secret with read-only Contents access.
+  artifact. `simai/ui-source` is public and starts from a snapshot taken on
+  2026-10-13; a revision of an earlier release lives only in the private
+  `simai/ui-source-history`, which the workflow falls back to with the
+  `UI_LOADER_READ_TOKEN` secret (read-only Contents access).
 
 ## Documentation
 

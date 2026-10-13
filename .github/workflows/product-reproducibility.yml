@@ -3,8 +3,8 @@ name: Product reproducibility
 on:
   workflow_dispatch:
     inputs:
-      ui_loader_ref:
-        description: Exact ui-loader branch, tag or SHA
+      ui_source_ref:
+        description: Exact ui-source branch, tag or SHA
         required: true
         default: main
 
@@ -27,13 +27,26 @@ jobs:
         with:
           path: ui-builder
 
-      - name: Checkout ui-loader
+      # simai/ui-source is public from 2026-10-13 and starts from a snapshot;
+      # a revision of an earlier release lives only in the private record,
+      # simai/ui-source-history, which needs the read token.
+      - name: Checkout ui-source
+        id: public-source
+        continue-on-error: true
         uses: actions/checkout@v7
         with:
-          repository: simai/ui-loader
-          ref: ${{ inputs.ui_loader_ref }}
+          repository: simai/ui-source
+          ref: ${{ inputs.ui_source_ref }}
+          path: ui-source
+
+      - name: Checkout ui-source-history (revisions before the public history)
+        if: steps.public-source.outcome == 'failure'
+        uses: actions/checkout@v7
+        with:
+          repository: simai/ui-source-history
+          ref: ${{ inputs.ui_source_ref }}
           token: ${{ secrets.UI_LOADER_READ_TOKEN }}
-          path: ui-loader
+          path: ui-source
 
       - uses: actions/setup-node@v7
         with:
@@ -42,7 +55,7 @@ jobs:
       - name: Build two frozen product waves
         run: >-
           node ui-builder/scripts/verify-product-reproducibility.cjs
-          "$GITHUB_WORKSPACE/ui-loader"
+          "$GITHUB_WORKSPACE/ui-source"
           "$RUNNER_TEMP/ui-builder-product-reproducibility"
 
       - name: Upload evidence
