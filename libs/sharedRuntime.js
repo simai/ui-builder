@@ -20,6 +20,7 @@ const BARE_MODULES = Object.freeze([
     "lit/directives/ref.js",
     "lit/directives/keyed.js",
     "lit/directives/unsafe-html.js",
+    "lit/directives/repeat.js",
 ]);
 
 const CORE_MODULES = Object.freeze({
