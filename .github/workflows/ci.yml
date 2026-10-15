@@ -12,13 +12,7 @@ permissions:
 
 jobs:
   verify:
-    # Both platforms: a package built on a Mac must reproduce in Linux CI, and
-    # the gzip test pins bytes that only hold if they do.
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-15, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-15
     timeout-minutes: 15
 
     steps:
@@ -32,3 +26,22 @@ jobs:
       - run: corepack enable
       - run: yarn install --frozen-lockfile --ignore-scripts --non-interactive
       - run: yarn run verify
+
+  # A package built on a Mac must reproduce in Linux CI: the packaging tests
+  # (gzip bytes pinned for a fixed input among them) run on Linux too. The
+  # rest of verify drives a browser the hosted Linux image cannot start.
+  packaging-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20.19.5
+          cache: yarn
+
+      - run: corepack enable
+      - run: yarn install --frozen-lockfile --ignore-scripts --non-interactive
+      - run: node --test tests/reproducibility/generated-packaging.test.js
