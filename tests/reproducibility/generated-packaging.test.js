@@ -209,6 +209,22 @@ test("gzip is byte-identical across independent roots", () => {
     }
 });
 
+// The bytes of a .gz do not depend on the machine that wrote it: the header
+// names no operating system and no time, and the deflate stream is pako's,
+// the same on arm64 macOS and x64 Linux. The digest is pinned, so CI on both
+// platforms (ci.yml) holds it -- a Mac-built receipt reproduces on Linux.
+test("gzip bytes are the same on every platform", () => {
+    const { deterministicGzip } = require("../../libs/generatedPackaging");
+    const input = Buffer.from(".sf-probe{color:red}\n".repeat(50));
+    const output = deterministicGzip(input);
+    assert.equal(output.subarray(0, 10).toString("hex"), "1f8b08000000000002ff");
+    assert.deepEqual(zlib.gunzipSync(output), input);
+    assert.equal(
+        crypto.createHash("sha256").update(output).digest("hex"),
+        "754d046396f27f8edb158ba2ea5396284ca422677c3516dc0fb5043c0605de93",
+    );
+});
+
 test("generated JavaScript has deterministic trailing whitespace removed before gzip", () => {
     const subject = fixture();
     const javascript = writeFile(

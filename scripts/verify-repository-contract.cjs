@@ -7,7 +7,7 @@ const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
 const ACCEPTED_LOCK_SHA256 =
-    "b8cef635055fd29c5c7784f2c93de78780a86929e530b4a04457f9b01c2a9529";
+    "0e78779f82f82ecadb5d9ff1052be3929d4deb63f59a1a151afba5170e9cbf85";
 
 function sha256(filePath)
 {
@@ -52,6 +52,9 @@ check(
     packageJson.devDependencies["@material-symbols/font-400"] === "0.47.0",
     "unexpected icon contract fixture",
 );
+// The .gz deflate: pure JavaScript, so its bytes do not depend on the
+// platform's zlib (generatedPackaging.deterministicGzip).
+check(packageJson.dependencies.pako === "1.0.11", "unexpected gzip runtime");
 check(lockSha256 === ACCEPTED_LOCK_SHA256, "accepted frozen lockfile drifted");
 check(
     packageJson.scripts["check:english"]

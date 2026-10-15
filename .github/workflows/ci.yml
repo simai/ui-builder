@@ -12,7 +12,13 @@ permissions:
 
 jobs:
   verify:
-    runs-on: macos-15
+    # Both platforms: a package built on a Mac must reproduce in Linux CI, and
+    # the gzip test pins bytes that only hold if they do.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
 
     steps:

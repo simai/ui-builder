@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-const zlib = require("node:zlib");
+const pako = require("pako");
 const crypto = require("node:crypto");
 const {
     materializeLegacyRuntimeCompatibility,
@@ -513,6 +513,18 @@ function materializeCoreUtilityAggregate(plan)
     return [destination];
 }
 
+// The same bytes on every platform. Node's zlib wrote a gzip whose header
+// names the operating system (macOS 0x13, Linux 0x03) and whose deflate stream
+// differs between builds of zlib (arm64 macOS and x64 Linux): every file it
+// compressed was equal once decompressed and different as bytes, so a package
+// built on a Mac could not be reproduced in Linux CI (DEV, ui-doc CI,
+// 2026-10-16). pako deflates in JavaScript, the same everywhere; the header is
+// fixed -- no time, no file name, operating system unknown (255).
+function deterministicGzip(bytes)
+{
+    return Buffer.from(pako.gzip(bytes, { level: 9, header: { os: 255, time: 0 } }));
+}
+
 function materializeDeterministicGzip(outputRoot)
 {
     if (!fs.existsSync(outputRoot))
@@ -531,11 +543,7 @@ function materializeDeterministicGzip(outputRoot)
         }
 
         const destination = `${source}.gz`;
-        const compressed = zlib.gzipSync(fs.readFileSync(source), {
-            level: zlib.constants.Z_BEST_COMPRESSION,
-            mtime: 0,
-        });
-        fs.writeFileSync(destination, compressed);
+        fs.writeFileSync(destination, deterministicGzip(fs.readFileSync(source)));
         written.push(destination);
     }
 
@@ -610,6 +618,7 @@ function materializeGeneratedPackaging(plan)
 }
 
 module.exports = {
+    deterministicGzip,
     materializeDeterministicGzip,
     materializeEmptyCompatibilityScripts,
     materializeGeneratedPackaging,
