@@ -91,3 +91,29 @@ test("an import of a name a runtime module does not export fails the build", asy
         fs.rmSync(root, { recursive: true, force: true });
     }
 });
+
+// A workspace under a symlinked directory (macOS's /var/folders is
+// /private/var/folders) resolves the same: the importer's real path and the
+// source root's linked one name one file (docs trial 4, 2026-10-15).
+test("a source root reached through a symlink still finds the runtime modules", () => {
+    const os = require("node:os");
+    const real = fs.mkdtempSync(path.join(os.tmpdir(), "sf-runtime-real-"));
+    const linked = `${real}-link`;
+    try
+    {
+        fs.mkdirSync(path.join(real, "src", "smart", "close"), { recursive: true });
+        fs.symlinkSync(real, linked);
+        const linkedSource = path.join(linked, "src");
+        const realContext = path.join(fs.realpathSync(real), "src", "smart", "close");
+        assert.equal(runtimeIdFor({
+            context: realContext,
+            request: "../../core/js/smart-base",
+            issuer: path.join(realContext, "index.js"),
+        }, linkedSource), "smart-base");
+    }
+    finally
+    {
+        fs.rmSync(linked, { force: true });
+        fs.rmSync(real, { force: true, recursive: true });
+    }
+});

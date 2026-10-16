@@ -35,6 +35,25 @@ function withoutExtension(file)
     return file.replace(/\.(m?js)$/u, "");
 }
 
+const realDirectories = new Map();
+function realDirectory(directory)
+{
+    if (!realDirectories.has(directory))
+    {
+        let real = directory;
+        try
+        {
+            real = fs.realpathSync(directory);
+        }
+        catch
+        {
+            real = directory;
+        }
+        realDirectories.set(directory, real);
+    }
+    return realDirectories.get(directory);
+}
+
 function runtimeIdFor({ context, request, issuer }, sourceRoot)
 {
     if (!request || (issuer && issuer.includes(`${path.sep}node_modules${path.sep}`)))
@@ -49,10 +68,17 @@ function runtimeIdFor({ context, request, issuer }, sourceRoot)
     {
         return null;
     }
-    const target = withoutExtension(path.resolve(context, request));
+    // Both sides through realpath: a workspace under a symlinked directory --
+    // macOS's /var/folders is /private/var/folders -- gave the importer's
+    // real path and the source root's linked one, nothing matched, and every
+    // package file bundled its own lit and smart-base instead of using the
+    // shared runtime, with a receipt that still said it agreed (docs trial 4,
+    // 2026-10-15).
+    const target = withoutExtension(path.resolve(realDirectory(context), request));
+    const root = realDirectory(sourceRoot);
     for (const [id, relative] of Object.entries(CORE_MODULES))
     {
-        if (target === path.join(sourceRoot, relative))
+        if (target === path.join(root, relative))
         {
             return id;
         }
