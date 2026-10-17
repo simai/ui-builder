@@ -332,8 +332,16 @@ is a separate, later decision.
 ## 5. Phase 3 (proposed)
 
 New `package.kind` values, each with its own builder and checks, in the order
-of the decision: `theme` (with the "theme from one colour" component), then
-`utility` and `composition-type` when a real request arrives. Name checks
+of the decision. `theme` is built (2026-10-18, `libs/themePackage.js`): a
+folder with `framework.lock.json` and `theme.json`
+(`{"schema": "simai.framework.theme-source", "schema_version": 1, "color":
+"#2e7d32"}`, or `hue` and `chroma`, an optional `selector` and `palettes`
+overrides) is built with ui-source's own `src/core/js/theme-palette.js` at the
+pinned revision -- the eight palettes of `sf-theme-generator` as the 128
+`--sf-<palette>-<tone>` primitives -- twice, compared, and laid as
+`theme/theme.css`, `theme/theme.json` and `theme-receipt.json` (schema
+`simai.framework.theme-receipt`). `utility` and `composition-type` follow when
+a real request arrives. Name checks
 against the Framework and other packages extend from the free release's rules
 to a package registry when one exists.
 

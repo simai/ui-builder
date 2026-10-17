@@ -21,6 +21,8 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 const { undeclaredRelations } = require("./packageRelations");
+const { resolvePackageSource } = require("./packageProduct");
+const { buildThemePackage, layThemePackage, themeReceipt } = require("./themePackage");
 
 const {
     CONFIG_FILE_NAME,
@@ -43,6 +45,7 @@ const FRAMEWORK_PRODUCTS = Object.freeze(["core", "component", "utility", "smart
 // What sf-build lays into --out marks the directory as its own: --replace-out
 // replaces only a directory that holds the marker (or an empty one).
 const MARKERS = Object.freeze({ framework: "build-report.json", package: "package-receipt.json" });
+const THEME_MARKER = "theme-receipt.json";
 
 const EXIT_CODES = Object.freeze({
     OK: 0,
@@ -667,7 +670,103 @@ async function packageFlow(command, options)
  */
 function buildPackage(options = {})
 {
+    if (kindOf(options) === "theme")
+    {
+        return themeFlow("package", options);
+    }
+
     return packageFlow("package", options);
+}
+
+// The kind asked for, before the full resolution: a theme package takes its
+// own flow (libs/themePackage.js), no webpack and no overlay.
+function kindOf(options)
+{
+    try
+    {
+        return resolveOptions(options, { discoverConfig: true }).kind;
+    }
+    catch (error)
+    {
+        return options.kind;
+    }
+}
+
+async function themeFlow(command, options)
+{
+    let resolved;
+    let workspace;
+
+    try
+    {
+        resolved = resolveOptions(options, { discoverConfig: true });
+        resolved.kind = assertKind(resolved.kind);
+        required(resolved.name, "the package name (--name or package.name)");
+
+        if (!PACKAGE_NAME.test(resolved.name))
+        {
+            throw new SfBuildError("USAGE", `package name must match ${PACKAGE_NAME}: ${resolved.name}`);
+        }
+
+        required(resolved.packageRoot, "the package folder (--package-root or package.path)");
+        required(resolved.uiSource, "a ui-source checkout (--ui-source, SF_BUILD_UI_SOURCE or framework.source)");
+        requireEnvironment({ python: false });
+        checkWorkspace(resolved.workspace);
+        checkOut(resolved.out, THEME_MARKER, resolved.replaceOut, [
+            ["builder", BUILDER_ROOT],
+            ["package folder", resolved.packageRoot],
+            ["ui-source checkout", resolved.uiSource],
+            ["workspace", resolved.workspace],
+        ]);
+
+        const { repositoryRoot, packagePath } = resolvePackageSource({ packageRoot: resolved.packageRoot });
+        workspace = newWorkspace(resolved.workspace);
+        fs.mkdirSync(workspace.root, { recursive: true });
+        resolved.onProgress(`building the theme ${resolved.name} twice`);
+        const built = await buildThemePackage({
+            repositoryRoot,
+            packagePath,
+            revision: resolved.packageRevision || "HEAD",
+            packageName: resolved.name,
+            uiSourceRoot: resolved.uiSource,
+            workspace: workspace.root,
+        });
+        const receipt = themeReceipt(built, {
+            packageName: resolved.name,
+            packagePath,
+            repository: resolved.packageRepository || null,
+            builderRevision: builderIdentity().revision,
+        });
+        let out = null;
+
+        if (resolved.out)
+        {
+            if (fs.existsSync(resolved.out))
+            {
+                fs.rmSync(resolved.out, { recursive: true });
+            }
+
+            out = layThemePackage(resolved.out, built, receipt);
+        }
+
+        const kept = resolved.keepWorkspace || !workspace.temporary ? true : dropWorkspace(workspace);
+
+        return result(command, {
+            ...packageFields(resolved),
+            out,
+            output: receipt.output,
+            package_source: receipt.package_source,
+            source_revision: built.sourceRevision,
+            warnings: [],
+            workspace: { kept, root: workspace.root },
+        });
+    }
+    catch (error)
+    {
+        return failure(command, error instanceof SfBuildError ? error : new SfBuildError("BUILD_FAILED", error.message), {
+            ...(resolved ? { kind: resolved.kind, package: resolved.name } : {}),
+        });
+    }
 }
 
 /** The two-wave check of a package alone: no receipt, nothing laid. */

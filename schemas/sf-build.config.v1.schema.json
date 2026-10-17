@@ -27,9 +27,9 @@
           "pattern": "^[a-z][a-z0-9-]*$"
         },
         "kind": {
-          "description": "The kind of extension. Only component packages (simai.component-package) are built in v1; theme, utility and composition-type packages are reserved for later versions of this schema.",
+          "description": "The kind of extension: a component package (simai.component-package) or a theme package (framework.lock.json and theme.json: the Framework's eight palettes made from one colour). utility and composition-type packages are reserved for later versions of this schema.",
           "type": "string",
-          "enum": ["components"]
+          "enum": ["components", "theme"]
         },
         "path": {
           "description": "The package folder (it holds framework.lock.json and src/smart/<folder>/). Default: the directory of the configuration file.",

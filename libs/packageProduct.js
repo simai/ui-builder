@@ -462,6 +462,7 @@ module.exports = {
     assertPackageName,
     collectPackageRules,
     defaultRuleFileHeader,
+    extractArchive,
     git,
     materializePackageOverlay,
     materializePackageRule,

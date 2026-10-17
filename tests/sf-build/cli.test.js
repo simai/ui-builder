@@ -105,7 +105,7 @@ test("missing inputs are usage errors reported before anything is built", async 
         const noOut = JSON.parse(sfBuild(["package", "--json", "--name", "acme", "--package-root", ".", "--ui-source", "."], { cwd: empty, env }).stdout);
         assert.match(noOut.error.message, /give --out .* or --workspace/u);
 
-        const kind = sfBuild(["package", "--json", "--name", "acme", "--kind", "theme", "--package-root", ".", "--ui-source", ".", "--out", "o"], { cwd: empty, env });
+        const kind = sfBuild(["package", "--json", "--name", "acme", "--kind", "utility", "--package-root", ".", "--ui-source", ".", "--out", "o"], { cwd: empty, env });
         assert.equal(kind.status, 2);
         assert.equal(JSON.parse(kind.stdout).error.code, "KIND_NOT_SUPPORTED");
 

@@ -24,8 +24,10 @@ Usage:
 Package options:
   --config <file>              sf-build.config.json (default: ./sf-build.config.json when present)
   --name <name>                package name, the key of SF_BOOT_CONFIG.packages
-  --kind <kind>                package kind (default: components; theme, utility and
-                               composition-type are reserved for later versions)
+  --kind <kind>                package kind: components (default) or theme; utility and
+                               composition-type are reserved for later versions
+                               (a theme package lays <out>/theme/theme.css, theme.json
+                               and theme-receipt.json)
   --package-root <dir>         the package folder: framework.lock.json and src/smart/<folder>/
   --package-revision <commit>  the commit to build (default: HEAD; never the working tree)
   --package-repository <id>    repository id for the receipt (default: the origin remote)

@@ -11,10 +11,11 @@ const path = require("node:path");
 const CONFIG_SCHEMA_ID = "simai.sf-build.config.v1";
 const CONFIG_FILE_NAME = "sf-build.config.json";
 const SCHEMA_PATH = path.resolve(__dirname, "../schemas/sf-build.config.v1.schema.json");
-// Kinds the owner decision of 2026-10-11 names. Only `components` is built;
-// the others are recognised so that the error says "not yet", not "unknown".
-const SUPPORTED_KINDS = Object.freeze(["components"]);
-const RESERVED_KINDS = Object.freeze(["theme", "utility", "composition-type"]);
+// Kinds the owner decision of 2026-10-11 names. `components` and `theme` are
+// built; the others are recognised so that the error says "not yet", not
+// "unknown".
+const SUPPORTED_KINDS = Object.freeze(["components", "theme"]);
+const RESERVED_KINDS = Object.freeze(["utility", "composition-type"]);
 
 class SfBuildError extends Error
 {

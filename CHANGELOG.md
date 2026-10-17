@@ -6,6 +6,11 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Added
 
+- Theme packages (`package.kind: "theme"`, `libs/themePackage.js`): a folder
+  with `framework.lock.json` and `theme.json` (a colour, or a hue and a chroma)
+  is built with ui-source's own theme calculation at the pinned revision, twice
+  and compared, and laid as `theme/theme.css` (the 128 `--sf-<palette>-<tone>`
+  primitives), `theme/theme.json` and `theme-receipt.json`.
 - `sf-build` (`bin/sf-build.js`) and its Node API (`libs/api.js`): one entry
   point for building the Framework (`framework`) and component packages
   (`package`), the two-wave check alone (`verify package|framework`) and the

@@ -36,7 +36,7 @@ function problemsOf(config)
 test("the schema file is the one the validator reads, and a full configuration is valid", () => {
     const schema = configSchema();
     assert.equal(schema.properties.schema.const, CONFIG_SCHEMA_ID);
-    assert.deepEqual(schema.properties.package.properties.kind.enum, ["components"]);
+    assert.deepEqual(schema.properties.package.properties.kind.enum, ["components", "theme"]);
     assert.equal(validateConfig(VALID), VALID);
     assert.equal(validateConfig({ schema: CONFIG_SCHEMA_ID, package: { name: "acme", kind: "components" } }).package.name, "acme");
     assert.equal(problemsOf({ ...VALID, $schema: "./node_modules/@simai/ui-builder/schemas/sf-build.config.v1.schema.json" }), null);
@@ -64,7 +64,7 @@ test("an invalid configuration names every problem with its path", () => {
 });
 
 test("the kinds the owner decision reserves are refused as not supported yet, an unknown kind as invalid", () => {
-    for (const kind of ["theme", "utility", "composition-type"])
+    for (const kind of ["utility", "composition-type"])
     {
         const error = problemsOf({ ...VALID, package: { ...VALID.package, kind } });
         assert.equal(error.code, "KIND_NOT_SUPPORTED", kind);
@@ -73,7 +73,7 @@ test("the kinds the owner decision reserves are refused as not supported yet, an
 
     const unknown = problemsOf({ ...VALID, package: { ...VALID.package, kind: "plugin" } });
     assert.equal(unknown.code, "CONFIG_INVALID");
-    assert.match(unknown.message, /\$\.package\.kind: must be one of "components"/u);
+    assert.match(unknown.message, /\$\.package\.kind: must be one of "components", "theme"/u);
 });
 
 test("a configuration file resolves its paths against its own directory", () => {
