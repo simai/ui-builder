@@ -9,6 +9,8 @@ framework source is `simai/ui-source`; `simai/ui` is the one generated
 distribution -- Core, Component, Utility and Smart under `distr/` -- and must
 not be edited as source code.
 
+Documentation (Russian): https://simai.github.io/ui-doc/
+
 ## Requirements
 
 - Node.js `20.19.5` for acceptance and CI; minimum supported version `20.19.0`
