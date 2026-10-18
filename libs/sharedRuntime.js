@@ -7,8 +7,7 @@
 // minified, parsed again for every element on the page.
 //
 // An import of one of these modules from a product source file becomes an
-// external that waits for the runtime: `SF.__internal.runtimeModule(id)` (or
-// `SF.runtimeModule(id)` under an older Core). The ids are the
+// external that waits for the runtime: `SF.runtimeModule(id)`. The ids are the
 // runtime's keys; keep the two lists the same.
 
 const fs = require("node:fs");
@@ -194,11 +193,7 @@ function applySharedRuntimeExternals(configurations, { sourceRoot })
                 // Core's lookup when Core is on the page; otherwise the runtime
                 // script's, once it has run (a page that includes it by hand).
                 const key = JSON.stringify(id);
-                // The lookup lives in SF.__internal since ui-source 948d7bf45
-                // (journal global-sf-internal); an older Core has it on SF
-                // itself, and both are asked so a package runs over either.
-                const lookup = "((s) => s && (s.__internal && s.__internal.runtimeModule ? s.__internal : s))(globalThis.SF)";
-                callback(null, `(${lookup} && ${lookup}.runtimeModule ? ${lookup}.runtimeModule(${key}) : new Promise((resolve) => globalThis.addEventListener("sf-runtime-ready", () => resolve(${lookup}.runtimeModule(${key})), { once: true })))`);
+                callback(null, `(globalThis.SF && globalThis.SF.runtimeModule ? globalThis.SF.runtimeModule(${key}) : new Promise((resolve) => globalThis.addEventListener("sf-runtime-ready", () => resolve(globalThis.SF.runtimeModule(${key})), { once: true })))`);
             },
         ];
     }
