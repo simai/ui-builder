@@ -43,7 +43,9 @@ test("an external waits for the runtime by its id", () => {
     assert.equal(configuration.externalsType, "promise");
     let value;
     configuration.externals[0]({ context: "/work/src/smart/close", request: "lit", contextInfo: { issuer } }, (error, result) => { value = result; });
-    assert.match(value, /globalThis\.SF\.runtimeModule\("lit"\)/u);
+    assert.match(value, /\.runtimeModule\("lit"\)/u);
+    // The lookup is asked of SF.__internal first, then of SF (an older Core).
+    assert.match(value, /s\.__internal && s\.__internal\.runtimeModule \? s\.__internal : s/u);
     assert.match(value, /sf-runtime-ready/u, "waits for the runtime script when Core is not on the page");
 });
 
