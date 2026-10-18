@@ -112,6 +112,8 @@ function safeDestination(outputRoot, relativePath, label)
     return destination;
 }
 
+const IMPORT_SPECIFIER = /(?:^|[;\s])(?:import|export)\s+(?:[^'";]*?\sfrom\s+)?["'](\.{1,2}\/[^"']+)["']|import\(\s*["'](\.{1,2}\/[^"']+)["']\s*\)/gu;
+
 function materializeSourceAssets(plan)
 {
     const sourceRoot = assertRegularTree(plan.sourceRoot, "sourceRoot");
@@ -228,6 +230,36 @@ function materializeSourceAssets(plan)
             }
 
             copied.push(destination);
+        }
+    }
+
+    // What a shipped module imports by a relative path ships with it, and what
+    // that imports, so the source modules work where they are laid: the
+    // composition modules import ../page-language.js and their own
+    // schema-name.mjs (2026-10-18). Only scripts under the source root.
+    const queue = copied.filter((file) => path.extname(file).toLowerCase() === ".mjs");
+
+    while (queue.length)
+    {
+        const file = queue.shift();
+
+        for (const match of fs.readFileSync(file, "utf8").matchAll(IMPORT_SPECIFIER))
+        {
+            const specifier = match[1] || match[2];
+            const destination = path.resolve(path.dirname(file), specifier);
+            const relativePath = path.relative(outputRoot, destination);
+            const source = path.join(sourceRoot, relativePath);
+
+            if (!isWithin(outputRoot, destination) || fs.existsSync(destination)
+                || !/\.m?js$/u.test(destination) || !fs.existsSync(source) || !fs.statSync(source).isFile())
+            {
+                continue;
+            }
+
+            fs.mkdirSync(path.dirname(destination), { recursive: true });
+            fs.copyFileSync(fs.realpathSync(source), destination);
+            copied.push(destination);
+            queue.push(destination);
         }
     }
 
@@ -585,7 +617,6 @@ function normalizeGeneratedTextWhitespace(outputRoot)
 // distribution holds. ui-1cb0739a8423 shipped composition modules importing
 // ../schema-name.mjs, a file the copy rule did not ship, and every consumer
 // that imported them failed with ERR_MODULE_NOT_FOUND (DEV, 2026-10-18).
-const IMPORT_SPECIFIER = /(?:^|[;\s])(?:import|export)\s+(?:[^'";]*?\sfrom\s+)?["'](\.{1,2}\/[^"']+)["']|import\(\s*["'](\.{1,2}\/[^"']+)["']\s*\)/gu;
 
 function assertShippedModuleImports(outputRoot, files)
 {

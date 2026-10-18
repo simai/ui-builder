@@ -424,3 +424,17 @@ test("a shipped module whose relative import the distribution does not hold fail
     fs.writeFileSync(bad, "import { isSchema } from '../schema-name.mjs';\nexport { isSchema };\n");
     assert.throws(() => assertShippedModuleImports(root, [good, bad]), /recipe\.mjs imports \.\.\/schema-name\.mjs/u);
 });
+
+test("what a shipped module imports by a relative path ships with it", () => {
+    const { materializeSourceAssets } = require("../../libs/generatedPackaging");
+    const sourceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "closure-src-"));
+    const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), "closure-out-"));
+    fs.mkdirSync(path.join(sourceRoot, "core/js/composition"), { recursive: true });
+    fs.writeFileSync(path.join(sourceRoot, "core/js/page-language.js"), "export const pageText = () => '';\n");
+    fs.writeFileSync(path.join(sourceRoot, "core/js/composition/overlay.mjs"), "import { pageText } from '../page-language.js';\nexport { pageText };\n");
+    fs.writeFileSync(path.join(sourceRoot, "core/js/composition/entry.js"), "");
+    const copied = materializeSourceAssets({ sourceRoot, outputRoot, entries: [{ key: "core/composition", input: path.join(sourceRoot, "core/js/composition/entry.js") }] });
+    assert.ok(fs.existsSync(path.join(outputRoot, "core/js/composition/overlay.mjs")), "the module itself ships");
+    assert.ok(fs.existsSync(path.join(outputRoot, "core/js/page-language.js")), "the imported script ships");
+    assert.ok(copied.some((file) => file.endsWith("page-language.js")));
+});
