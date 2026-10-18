@@ -410,3 +410,17 @@ test("source and output symlinks fail closed", () => {
         fs.rmSync(outputSubject.workspace, { force: true, recursive: true });
     }
 });
+
+test("a shipped module whose relative import the distribution does not hold fails the build", () => {
+    const { assertShippedModuleImports } = require("../../libs/generatedPackaging");
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "shipped-imports-"));
+    const dir = path.join(root, "core/js/composition");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "here.mjs"), "export const here = 1;\n");
+    const good = path.join(dir, "index.mjs");
+    fs.writeFileSync(good, "import { here } from './here.mjs';\nexport { here };\n");
+    assert.doesNotThrow(() => assertShippedModuleImports(root, [good]));
+    const bad = path.join(dir, "recipe.mjs");
+    fs.writeFileSync(bad, "import { isSchema } from '../schema-name.mjs';\nexport { isSchema };\n");
+    assert.throws(() => assertShippedModuleImports(root, [good, bad]), /recipe\.mjs imports \.\.\/schema-name\.mjs/u);
+});

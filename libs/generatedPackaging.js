@@ -580,6 +580,44 @@ function normalizeGeneratedTextWhitespace(outputRoot)
     return normalized;
 }
 
+// Every relative import of a module the distribution ships as source (the
+// composition modules under core/js/composition) resolves to a file the
+// distribution holds. ui-1cb0739a8423 shipped composition modules importing
+// ../schema-name.mjs, a file the copy rule did not ship, and every consumer
+// that imported them failed with ERR_MODULE_NOT_FOUND (DEV, 2026-10-18).
+const IMPORT_SPECIFIER = /(?:^|[;\s])(?:import|export)\s+(?:[^'";]*?\sfrom\s+)?["'](\.{1,2}\/[^"']+)["']|import\(\s*["'](\.{1,2}\/[^"']+)["']\s*\)/gu;
+
+function assertShippedModuleImports(outputRoot, files)
+{
+    const unresolved = [];
+
+    for (const file of files)
+    {
+        if (path.extname(file).toLowerCase() !== ".mjs")
+        {
+            continue;
+        }
+
+        const source = fs.readFileSync(file, "utf8");
+
+        for (const match of source.matchAll(IMPORT_SPECIFIER))
+        {
+            const specifier = match[1] || match[2];
+            const target = path.resolve(path.dirname(file), specifier);
+
+            if (!isWithin(outputRoot, target) || !fs.existsSync(target) || !fs.statSync(target).isFile())
+            {
+                unresolved.push(`${path.relative(outputRoot, file)} imports ${specifier}`);
+            }
+        }
+    }
+
+    if (unresolved.length)
+    {
+        throw new Error(`a shipped module imports a file the distribution does not hold: ${unresolved.join("; ")}`);
+    }
+}
+
 function materializeGeneratedPackaging(plan)
 {
     if (!fs.existsSync(plan.outputRoot))
@@ -596,6 +634,7 @@ function materializeGeneratedPackaging(plan)
     }
 
     const sourceAssets = materializeSourceAssets(plan);
+    assertShippedModuleImports(plan.outputRoot, sourceAssets);
     const aggregateAssets = materializeCoreUtilityAggregate(plan);
     const compatibilityScripts = [
         ...materializeEmptyCompatibilityScripts(plan),
@@ -618,6 +657,7 @@ function materializeGeneratedPackaging(plan)
 }
 
 module.exports = {
+    assertShippedModuleImports,
     deterministicGzip,
     materializeDeterministicGzip,
     materializeEmptyCompatibilityScripts,
