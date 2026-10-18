@@ -113,7 +113,11 @@ function atPath(packagePath, relative)
 
 function validateSourceLock(lock, label, packageName)
 {
-    if (lock.schema !== SOURCE_LOCK_SCHEMA && !LEGACY_SOURCE_LOCK_SCHEMAS.includes(lock.schema))
+    // The lock may name its format without the version, with schema_version
+    // beside it (owner decision 2026-10-11); both forms are read.
+    const unversioned = lock.schema === SOURCE_LOCK_SCHEMA.replace(/\.v1$/u, "") && lock.schema_version === 1;
+
+    if (lock.schema !== SOURCE_LOCK_SCHEMA && !unversioned && !LEGACY_SOURCE_LOCK_SCHEMAS.includes(lock.schema))
     {
         throw new Error(`${label}: schema must be ${SOURCE_LOCK_SCHEMA}`);
     }

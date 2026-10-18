@@ -12,8 +12,13 @@
       "type": "string"
     },
     "schema": {
-      "description": "The configuration schema id.",
-      "const": "simai.sf-build.config.v1"
+      "description": "The configuration schema id: simai.sf-build.config with schema_version 1, or the older form with the version in the name (names carry no version, owner decision 2026-10-11; both are read until the change journal removes the older one).",
+      "enum": ["simai.sf-build.config", "simai.sf-build.config.v1"]
+    },
+    "schema_version": {
+      "description": "The major version of the configuration format, beside the unversioned schema name.",
+      "type": "integer",
+      "enum": [1]
     },
     "package": {
       "description": "The package this configuration builds.",

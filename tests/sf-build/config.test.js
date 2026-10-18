@@ -35,7 +35,9 @@ function problemsOf(config)
 
 test("the schema file is the one the validator reads, and a full configuration is valid", () => {
     const schema = configSchema();
-    assert.equal(schema.properties.schema.const, CONFIG_SCHEMA_ID);
+    assert.deepEqual(schema.properties.schema.enum, ["simai.sf-build.config", CONFIG_SCHEMA_ID]);
+    assert.equal(validateConfig({ ...VALID, schema: "simai.sf-build.config", schema_version: 1 }).package.name, "larena");
+    assert.equal(problemsOf({ ...VALID, schema: "simai.sf-build.config" }).code, "CONFIG_INVALID");
     assert.deepEqual(schema.properties.package.properties.kind.enum, ["components", "theme"]);
     assert.equal(validateConfig(VALID), VALID);
     assert.equal(validateConfig({ schema: CONFIG_SCHEMA_ID, package: { name: "acme", kind: "components" } }).package.name, "acme");
@@ -51,7 +53,7 @@ test("an invalid configuration names every problem with its path", () => {
     });
     assert.equal(error.code, "CONFIG_INVALID");
     assert.deepEqual(error.details.problems, [
-        "$.schema: must be \"simai.sf-build.config.v1\"",
+        "$.schema: must be one of \"simai.sf-build.config\", \"simai.sf-build.config.v1\"",
         "$.package.name: must match ^[a-z][a-z0-9-]*$",
         "$.package: unknown property extra",
         "$.package.path: must not be empty",

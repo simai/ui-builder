@@ -9,6 +9,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const CONFIG_SCHEMA_ID = "simai.sf-build.config.v1";
+// The same format named without its version (owner decision 2026-10-11), with
+// schema_version beside it; both are read.
+const CONFIG_SCHEMA_NAME = "simai.sf-build.config";
 const CONFIG_FILE_NAME = "sf-build.config.json";
 const SCHEMA_PATH = path.resolve(__dirname, "../schemas/sf-build.config.v1.schema.json");
 // Kinds the owner decision of 2026-10-11 names. `components` and `theme` are
@@ -126,6 +129,12 @@ function validateConfig(config, label = "configuration")
 
     const problems = validateAgainst(configSchema(), config);
 
+    // The unversioned name carries its version beside it.
+    if (config && config.schema === CONFIG_SCHEMA_NAME && config.schema_version !== 1)
+    {
+        problems.push("$.schema_version: must be 1 beside the schema simai.sf-build.config");
+    }
+
     if (problems.length !== 0)
     {
         throw new SfBuildError("CONFIG_INVALID", `${label} is not a valid ${CONFIG_SCHEMA_ID}:\n  ${problems.join("\n  ")}`, { problems });
@@ -190,6 +199,7 @@ function loadConfig(file)
 module.exports = {
     CONFIG_FILE_NAME,
     CONFIG_SCHEMA_ID,
+    CONFIG_SCHEMA_NAME,
     RESERVED_KINDS,
     SCHEMA_PATH,
     SUPPORTED_KINDS,
