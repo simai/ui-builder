@@ -89,7 +89,7 @@ const pkg = {
     version,
     description: `SIMAI Framework distribution, release ${id}: Core, the Loader, components, utilities and Smart Components, ready to serve from distr/.`,
     license: "Apache-2.0",
-    homepage: "https://simai.github.io/ui-doc/",
+    homepage: "https://ui.simai.io/",
     repository: { type: "git", url: "git+https://github.com/simai/ui.git" },
     files: ["distr", "package-manifest.json", "LICENSE", "NOTICE", "THIRD-PARTY-NOTICES.md", "README.md"],
     simai: { release: id, commit },
@@ -107,7 +107,7 @@ fs.writeFileSync(path.join(out, "README.md"), [
     `<script src="https://cdn.jsdelivr.net/npm/${name}@${version}/distr/core/js/core.js"></script>`,
     "```",
     "",
-    "Components, utilities and Smart Components ship in their minified form (the Loader asks for it); Core in both forms. Documentation: https://simai.github.io/ui-doc/",
+    "Components, utilities and Smart Components ship in their minified form (the Loader asks for it); Core in both forms. Documentation: https://ui.simai.io/",
     "",
 ].join("\n"));
 
