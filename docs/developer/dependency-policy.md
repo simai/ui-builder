@@ -31,7 +31,10 @@ frozen. This is a deliberate compatibility pin, not an unattended update.
 The repository contract binds the lockfile to SHA-256
 `b8cef635055fd29c5c7784f2c93de78780a86929e530b4a04457f9b01c2a9529`.
 
-The icon subset compiler uses exact-pinned `subset-font` `2.6.0`. The
+The icon subset compiler drives the HarfBuzz subsetter WASM of exact-pinned
+`harfbuzzjs` `0.10.3` directly, because `subset-font` `2.6.0` subsets only by
+text and cannot keep an exact glyph set. `subset-font` is no longer imported;
+it stays pinned until a dependency update candidate removes it. The
 Material Symbols package is a development-only ligature fixture; production
 callers provide their exact source font and SHA-256 through the compiler API
 or the `sf-icons` CLI.
@@ -41,8 +44,8 @@ collected from parsed elements and attributes rather than guessed with regular
 expressions.
 
 Exact-pinned `fontverter` `2.0.0` and `harfbuzzjs` `0.10.3` shape every
-requested ligature before subsetting. An unknown icon name therefore fails
-before any output packet is written.
+requested ligature before subsetting and again on the emitted font. An
+unknown icon name therefore fails before any output packet is written.
 
 ## Dependency update gate
 

@@ -358,7 +358,7 @@ Publishing needs:
   `scripts/verify-repository-contract.cjs`.
 - **Name and scope.** The decision names `@simai/sf-build`; today the package
   is `@simai/ui-builder`, which `verify-repository-contract.cjs` and the icon
-  generator id (`@simai/ui-builder/subset-font@...`) assert. Renaming changes
+  generator id (`@simai/ui-builder/hb-subset@...`) assert. Renaming changes
   `iconSubset.js` output provenance; either keep `@simai/ui-builder` as the
   package name with an `sf-build` binary (what phase 1 does), or rename and
   accept the provenance change through the dependency policy. The `@simai`

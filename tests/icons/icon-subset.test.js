@@ -56,7 +56,7 @@ test("outlined subset is deterministic, content-addressed and schema-valid", asy
     assert.deepEqual(first.manifest.icons, ["home", "menu", "search"]);
     assert.equal(first.font.subarray(0, 4).toString("ascii"), "wOF2");
     assert.ok(first.font.length < sourceFont().length / 10);
-    assert.ok(first.font.length > 1_628, "ligature glyph closure must be retained");
+    assert.equal(first.drawnIcons, 3, "exactly the requested ligatures are retained");
     assert.match(first.files.font, /^material-symbols-outlined\.[a-f0-9]{20}\.woff2$/);
     assert.match(first.css, /font-feature-settings: 'liga'/);
     assert.match(first.css, new RegExp(first.files.font.replaceAll(".", "\\.")));

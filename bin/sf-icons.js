@@ -120,6 +120,7 @@ async function main()
     writeExact(path.join(outputRoot, result.files.manifest), result.manifestJson);
 
     process.stdout.write(`${JSON.stringify({
+        drawn_icons: result.drawnIcons,
         files: result.files,
         manifest: result.manifest,
         output_root: outputRoot,

@@ -79,6 +79,17 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Fixed
 
+- `sf-icons build` no longer emits a variable font whose axes do nothing
+  (#1). A large instanced Material Symbols subset lost its `gvar` table while
+  `fvar` still declared the axes, and the ligature check passed. The emitted
+  font is now refused when `fvar` has no `gvar`, when a declared axis changes
+  no icon outline, or when it draws more icons than were requested.
+- Icon subsets keep only the requested icons. Subsetting by the letters of the
+  names kept every ligature they spell (78 names drew 3,465 icons in a
+  297,916-byte font); the source is now subset by the requested glyph ids, and
+  the same 78 names give a 70,140-byte font that draws 78 icons and keeps
+  `gvar`. The generator id is now `@simai/ui-builder/hb-subset@0.10.3`, and the
+  CLI reports `drawn_icons`.
 - Standardized the brand spelling as `SIMAI` across documentation, package
   metadata, automated checks, and GitHub repository metadata.
 - Stable module and chunk identifiers now normalize both lexical and real

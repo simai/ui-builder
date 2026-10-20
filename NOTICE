@@ -9,3 +9,7 @@ of the work.
 
 The build depends on third-party packages installed from the npm registry
 (yarn.lock); they are not part of this repository and keep their own licences.
+
+tests/icons/fixtures/material-symbols-outlined-variable.woff2 is a subset of
+Material Symbols Outlined by Google, licensed under the Apache License,
+Version 2.0, and is used only as a test fixture.

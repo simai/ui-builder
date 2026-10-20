@@ -30,6 +30,7 @@ test("CLI writes one immutable packet and is idempotent", () => {
         const first = run(workspace);
         assert.equal(first.status, 0, first.stderr);
         const result = JSON.parse(first.stdout);
+        assert.equal(result.drawn_icons, 2);
         assert.deepEqual(fs.readdirSync(workspace).sort(), Object.values(result.files).sort());
 
         const second = run(workspace);
