@@ -245,9 +245,12 @@ function freeRelease(sourceRevision, reference)
 }
 
 /** A workspace as verify-package-reproducibility.cjs leaves it. */
-function packageWorkspace(sourceRevision, rules)
+function packageWorkspace(sourceRevision, rules, manifest = { name: "@example/acme-ui", private: true, license: "Apache-2.0" })
 {
-    const product = repository({ "resources/ui/framework.lock.json": lock(sourceRevision) });
+    const product = repository({
+        "resources/ui/framework.lock.json": lock(sourceRevision),
+        ...(manifest === null ? {} : { "resources/ui/package.json": typeof manifest === "string" ? manifest : `${JSON.stringify(manifest)}\n` }),
+    });
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "package-workspace-"));
     const output = path.join(workspace, "wave-1/output/package/acme");
     for (const folder of Object.keys(rules).map(name => name.slice(3)))
@@ -309,6 +312,9 @@ test("the receipt names the package, its source, the free release, the builder a
         path: "resources/ui",
         tree: git(product, "rev-parse", "HEAD:resources/ui"),
     });
+    assert.deepEqual(value.licence, { ref: "Apache-2.0" });
+    assert.deepEqual(Object.keys(value).slice(0, 6), ["schema_id", "schema_version", "package", "loader", "package_source", "licence"]);
+    assert.equal("tier" in value.licence, false);
     assert.deepEqual(value.framework, { source: { repository: "simai/ui-source", revision: source }, release: id });
     assert.deepEqual(value.builder, { repository: "simai/ui-builder", revision: "b".repeat(40), clean: true });
     assert.deepEqual(value.required_files.map(item => item.path), [
@@ -373,4 +379,34 @@ test("the receipt refuses an output the report did not hash, or a rule file of a
     report.products.package.manifest_sha256 = sha256(`${JSON.stringify(files)}\n`);
     writeFile(other.workspace, "report.json", JSON.stringify(report));
     assert.match(receipt(other.workspace).result.stderr, /registers package other, the build was acme/u);
+});
+
+test("the receipt records the package's declared licence and refuses a package that declares none", () => {
+    const source = "a".repeat(40);
+    const expression = "PolyForm-Small-Business-1.0.0 OR LicenseRef-SIMAI-Commercial";
+    const dual = packageWorkspace(source, RULES, { name: "@example/acme-ui", license: expression });
+    const recorded = receipt(dual.workspace);
+    assert.equal(recorded.result.status, 0, recorded.result.stderr);
+    assert.deepEqual(recorded.value.licence, { ref: expression });
+
+    // The licence lives in the receipt only: the archive is the same bytes.
+    const plain = packageWorkspace(source, RULES);
+    assert.equal(receipt(plain.workspace).value.output.archive_sha256, recorded.value.output.archive_sha256);
+
+    const silent = packageWorkspace(source, RULES, { name: "@example/acme-ui", private: true });
+    const refused = receipt(silent.workspace);
+    assert.equal(refused.result.status, 1);
+    assert.match(refused.result.stderr, /PACKAGE_RECEIPT_ERROR — resources\/ui\/package\.json of [0-9a-f]{12} declares no "license": a package must declare its licence/u);
+    assert.ok(!fs.existsSync(path.join(silent.workspace, "package-receipt.json")));
+
+    const missing = receipt(packageWorkspace(source, RULES, null).workspace);
+    assert.equal(missing.result.status, 1);
+    assert.match(missing.result.stderr, /resources\/ui\/package\.json of [0-9a-f]{12} does not exist: a package must declare its licence/u);
+
+    for (const license of ["UNLICENSED", "SEE LICENSE IN LICENSE.md", "", "MIT OR", { type: "MIT" }])
+    {
+        const bad = receipt(packageWorkspace(source, RULES, { name: "@example/acme-ui", license }).workspace);
+        assert.equal(bad.result.status, 1, `license ${JSON.stringify(license)} was accepted`);
+        assert.match(bad.result.stderr, /is not an SPDX id, a LicenseRef-\.\.\. or an SPDX expression/u);
+    }
 });

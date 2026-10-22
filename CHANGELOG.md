@@ -6,6 +6,11 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Added
 
+- The product package receipt records the package's licence: `licence.ref`,
+  the `license` of the package folder's `package.json` at the built revision
+  (an SPDX id, a `LicenseRef-...` or an SPDX expression). A package that
+  declares no licence gets no receipt. The archive is unchanged; the receipt
+  stays `simai.framework.product-package-receipt` v1 (an additive field).
 - Theme packages (`package.kind: "theme"`, `libs/themePackage.js`): a folder
   with `framework.lock.json` and `theme.json` (a colour, or a hue and a chroma)
   is built with ui-source's own theme calculation at the pinned revision, twice

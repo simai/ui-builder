@@ -62,6 +62,7 @@ function fixture()
             out: "public/acme-ui",
         }, null, 2)}\n`,
         "app/server.php": "<?php\n",
+        "resources/ui/package.json": `${JSON.stringify({ name: "@example/acme-ui", private: true, license: "LicenseRef-Acme-Commercial" })}\n`,
         "resources/ui/framework.lock.json": `${JSON.stringify({
             schema: "simai.framework.product-package-source-lock.v1",
             package: "acme",
@@ -119,6 +120,7 @@ test("sf-build package lays a package, its receipt and its archive at the config
         assert.match(fs.readFileSync(path.join(out, "smart/rule.js"), "utf8"), /SF\.RuleLoader\.registerPackage\("acme", \{/u);
         const receipt = JSON.parse(fs.readFileSync(path.join(out, "package-receipt.json"), "utf8"));
         assert.equal(receipt.package, "acme");
+        assert.deepEqual(receipt.licence, { ref: "LicenseRef-Acme-Commercial" });
         assert.equal(receipt.output.archive_sha256, result.output.archive_sha256);
         assert.equal(receipt.output.manifest_sha256, result.output.manifest_sha256);
         assert.equal(sha256(fs.readFileSync(path.join(out, "package-acme.tar"))), receipt.output.archive_sha256);

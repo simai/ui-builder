@@ -9,7 +9,10 @@ package name, its source repository, revision and path), over what (the
 ui-source revision, and the free release `ui-<12>` built from it when a `ui`
 checkout is given), by what (the ui-builder revision), and the output's hashes
 (every file, a manifest digest, and a deterministic tar archive written beside
-the receipt), its required files and its element and rule inventory.
+the receipt), its required files and its element and rule inventory, and under
+what licence: `licence.ref`, the `license` of the package folder's
+`package.json` at the built revision (an SPDX id, a `LicenseRef-...` or an SPDX
+expression). A package without a declared licence gets no receipt.
 
 With `--ui`, the package is also checked against the free release:
 
@@ -42,6 +45,11 @@ RUNTIME_PATH = 'smart'
 RULE_FILE = 'smart/rule.js'
 RULE_FILE_PATTERN = re.compile(r'(?s)(?://[^\n]*\n)*SF\.RuleLoader\.registerPackage\("([a-z][a-z0-9-]*)", \{\n  rules: (.*),\n\}\);\n')
 RELEASE_LOCK = re.compile(r'ui-[0-9a-f]{12}\.lock\.json')
+# An SPDX license expression: ids (`Apache-2.0`, `LicenseRef-SIMAI-Commercial`,
+# `GPL-2.0-or-later`, `MIT+`), AND / OR / WITH, parentheses. npm's
+# `UNLICENSED` and `SEE LICENSE IN <file>` name no licence and are refused.
+LICENCE_TOKEN = re.compile(r'\(|\)|[A-Za-z0-9][A-Za-z0-9.\-]*\+?')
+LICENCE_OPERATORS = {'AND', 'OR', 'WITH'}
 
 
 class ReceiptError(ValueError):
@@ -205,6 +213,50 @@ def check_against_release(ui_root, release_lock, name, rules, folders, output_ro
     return {**result, 'status': 'agrees'}
 
 
+def is_licence_expression(value):
+    tokens = value.replace('(', ' ( ').replace(')', ' ) ').split()
+    if not tokens or any(not LICENCE_TOKEN.fullmatch(token) for token in tokens):
+        return False
+    depth, expect_id = 0, True
+    for token in tokens:
+        if token == '(':
+            if not expect_id:
+                return False
+            depth += 1
+        elif token == ')':
+            if expect_id or depth == 0:
+                return False
+            depth -= 1
+        elif token in LICENCE_OPERATORS:
+            if expect_id:
+                return False
+            expect_id = True
+        else:
+            if not expect_id or token.upper() in LICENCE_OPERATORS or token == 'UNLICENSED':
+                return False
+            expect_id = False
+    return depth == 0 and not expect_id
+
+
+def read_licence(root, revision, folder):
+    """The licence the package declares: `license` of the package folder's
+    package.json at the built revision."""
+    path = f'{folder}/package.json' if folder else 'package.json'
+    where = f'{path} of {revision[:12]}'
+    if not exists(root, revision, path):
+        raise ReceiptError(f'{where} does not exist: a package must declare its licence in its package.json "license"')
+    try:
+        manifest = json.loads(git(root, 'show', f'{revision}:{path}'))
+    except json.JSONDecodeError as error:
+        raise ReceiptError(f'{where} is not JSON: {error}') from None
+    licence = manifest.get('license') if isinstance(manifest, dict) else None
+    if licence is None:
+        raise ReceiptError(f'{where} declares no "license": a package must declare its licence (an SPDX id, a LicenseRef-... or an SPDX expression)')
+    if not isinstance(licence, str) or not is_licence_expression(licence.strip()):
+        raise ReceiptError(f'{where}: "license" {json.dumps(licence)} is not an SPDX id, a LicenseRef-... or an SPDX expression')
+    return {'ref': licence.strip()}
+
+
 def required_files(rules):
     files = [RULE_FILE]
     for rule_name, rule in sorted(rules.items()):
@@ -241,11 +293,13 @@ def build_receipt(args):
     if missing:
         raise ReceiptError('required files are not in the output: ' + ', '.join(missing))
 
+    source = report['package_source']
+    licence = read_licence(source['root'], source['revision'], source['path'])
+
     archive = deterministic_tar(output_root, files)
     archive_path = Path(args.archive) if args.archive else workspace / f'package-{name}.tar'
     archive_path.write_bytes(archive)
 
-    source = report['package_source']
     treeish = f'{source["revision"]}:{source["path"]}' if source['path'] else source['revision'] + '^{tree}'
     framework = {'source': {'repository': 'simai/ui-source', 'revision': report['source_revision']}, 'release': None}
     reference = {'path': f'distr/core/contracts/packages/{name}.package.json', 'release': None, 'status': 'not-checked'}
@@ -276,6 +330,7 @@ def build_receipt(args):
             'path': source['path'],
             'tree': text(source['root'], 'rev-parse', '--verify', treeish),
         },
+        'licence': licence,
         'framework': framework,
         'builder': {
             'repository': 'simai/ui-builder',

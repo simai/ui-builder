@@ -35,12 +35,14 @@ The folder may be the root of a repository or any subdirectory of a larger one
     rule.js                  writes SF.RuleLoader['cl-<folder>']
     scss/ template/ ...      as in ui-source
   src/smart/<helper>/        optional: a folder without rule.js is laid, not built
+  package.json               the package's licence: "license" (required)
   tests/                     the package's tests (laid into the overlay)
   docs/                      optional, laid into the overlay
 ```
 
-Only `src/`, `tests/` and `docs/` of the folder are used; everything else in
-the repository is ignored.
+Only `src/`, `tests/` and `docs/` of the folder are built, and the `license`
+of its `package.json` is recorded in the receipt; everything else in the
+repository is ignored.
 
 `framework.lock.json`:
 
@@ -158,6 +160,7 @@ of the output (`ustar`, entries sorted, owner `0:0`, mtime `0`, modes
   "package": "larena",
   "loader": {"declaration": "SF_BOOT_CONFIG.packages.larena.base", "base": "<mount>/smart", "rule_file": "smart/rule.js"},
   "package_source": {"repository": "simai/larena-ui", "revision": "<commit>", "path": "resources/ui", "tree": "<git tree of the path>"},
+  "licence": {"ref": "Apache-2.0"},
   "framework": {"source": {"repository": "simai/ui-source", "revision": "<pinned>"}, "release": "ui-<12>"},
   "builder": {"repository": "simai/ui-builder", "revision": "<commit>", "clean": true},
   "node": "v20.19.5",
@@ -174,6 +177,19 @@ of the output (`ustar`, entries sorted, owner `0:0`, mtime `0`, modes
   revision, resolved from `ui/contracts/releases/ui-<12>.lock.json`
   (`build_inputs.source.commit`); `null` when there is none yet, or when no
   `--ui` is given. The package must be served beside that release.
+- `licence.ref` is the `license` field of the package folder's
+  `package.json` at `package_source.revision`, as written there: an SPDX
+  license id (`Apache-2.0`), a `LicenseRef-...`, or an SPDX expression
+  (`PolyForm-Small-Business-1.0.0 OR LicenseRef-SIMAI-Commercial`). A package
+  must declare its licence: without a `package.json`, without `license`, or
+  with a value that is not an SPDX expression (npm's `UNLICENSED`,
+  `SEE LICENSE IN <file>`, the old `{type}` object), the receipt is refused.
+  The licence lives in the receipt only; the output and its archive do not
+  change. The receipt records what the package declares, nothing more: which
+  terms a consumer takes it under (a tier, a commercial grant) is the
+  consumer's own data. Receipts written before this field have no `licence`;
+  a reader of a v1 receipt treats its absence as "not recorded" rather than
+  as any licence. The field is additive, so `schema_version` stays `1`.
 - `required_files` are the files a consumer must find under the mount: the
   rule file, and each component's script and, when its rule declares one,
   stylesheet.
@@ -221,7 +237,7 @@ window.SF_BOOT_CONFIG = {packages: {larena: {base: '/assets/larena-ui/smart'}}};
 ```
 
 The Loader fetches `<base>/rule.js` itself. The consumer's own lock pins the
-receipt: `package`, `package_source.revision`, `framework.release`,
+receipt: `package`, `package_source.revision`, `licence.ref`, `framework.release`,
 `output.manifest_sha256` (or `output.archive_sha256`) and the `required_files`
 hashes, and its gate checks the served files against them.
 
