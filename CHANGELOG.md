@@ -6,6 +6,9 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Added
 
+- The npm package the builder packs names its author: `author` is
+  `Rim Zabarov`, the author and sole rightholder of the products (owner
+  decision, 2026-10-23). The package carried no author before.
 - The product package receipt records the package's licence: `licence.ref`,
   the `license` of the package folder's `package.json` at the built revision
   (an SPDX id, a `LicenseRef-...` or an SPDX expression). A package that

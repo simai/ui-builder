@@ -1,11 +1,14 @@
 SIMAI Framework UI Builder
-Copyright 2008-2026 Rim Zabarov and contributors
+Author: Rim Zabarov (Рим Забаров)
+Copyright 2008-2026 Rim Zabarov
 
 This product is licensed under the Apache License, Version 2.0 (LICENSE).
 
-"SIMAI" and "SIMAI Framework" are names of the SIMAI project. The licence
-above grants no right to use them, except as needed to describe the origin
-of the work.
+"SIMAI" and "SIMAI Framework" are names of the SIMAI project and trademarks
+of their owner. The licence above grants no right to use them, except as
+needed to describe the origin of the work.
+
+Distributed and supported under licence by ООО «Симай».
 
 The build depends on third-party packages installed from the npm registry
 (yarn.lock); they are not part of this repository and keep their own licences.

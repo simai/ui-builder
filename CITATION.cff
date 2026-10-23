@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you refer to SIMAI Framework UI Builder, please cite it as below."
+title: "SIMAI Framework UI Builder"
+abstract: "The deterministic build system that lays the SIMAI Framework distribution and its product packages."
+type: software
+authors:
+  - family-names: "Zabarov"
+    given-names: "Rim"
+    email: "rim@zabarov.com"
+license: Apache-2.0
+repository-code: "https://github.com/simai/ui-builder"
+url: "https://ui.simai.io/"

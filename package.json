@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Deterministic Webpack build system for SIMAI Framework Core, Component, Utility, and Smart layers",
   "private": true,
+  "author": "Rim Zabarov",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

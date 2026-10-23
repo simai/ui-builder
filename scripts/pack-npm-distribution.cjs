@@ -88,6 +88,7 @@ const pkg = {
     name,
     version,
     description: `SIMAI Framework distribution, release ${id}: Core, the Loader, components, utilities and Smart Components, ready to serve from distr/.`,
+    author: "Rim Zabarov",
     license: "Apache-2.0",
     homepage: "https://ui.simai.io/",
     repository: { type: "git", url: "git+https://github.com/simai/ui.git" },
