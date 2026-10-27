@@ -27,6 +27,12 @@ for the framework repositories.
 - [Publishing a SIMAI Framework Pro release](developer/pro-release.md)
   (superseded by product component packages)
 
+### Keep a consumer in step with a release
+
+- [Usage records and reconcile (simai.linkage)](developer/linkage-reconcile.md):
+  what a consumer records, and the command that tells it what is current, out
+  of date or renamed
+
 ### Review the migration provenance
 
 - [Migration from the legacy `sf5.webpack` repository](developer/migration-from-sf5-webpack.md)

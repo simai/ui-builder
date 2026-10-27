@@ -133,6 +133,23 @@ beside the free release, and pin the receipt.
 Requirements: Node.js `>=20.19.0`, git, Python 3 (the receipt), and the Yarn
 cache or network access for the frozen dependency runtimes.
 
+## Reconcile a consumer with a release
+
+A consumer of SIMAI Framework units (the Figma UI kit, a documentation site, a
+product) keeps a usage record (`simai.framework.unit-usage`) and compares it
+with a release's unit inventory before it publishes (standard
+`simai.linkage`). The command needs Node.js only, not the sources:
+
+```sh
+node scripts/reconcile.mjs --record usage.json --inventory ui-<12> \
+  --releases https://raw.githubusercontent.com/simai/ui/main/contracts/releases \
+  --journal https://raw.githubusercontent.com/simai/ui-source/main/contracts/changes/journal.json
+```
+
+Every unit of every place gets `current`, `update-available`, `former-name`,
+`action-needed` or `missing`, including the token sets, fonts and icon sets
+it depends on. See [Usage records and reconcile](docs/developer/linkage-reconcile.md).
+
 ## Full reproducibility check
 
 The verifier prepares two isolated frozen runtime pairs and builds all four
@@ -192,6 +209,7 @@ that intentionally do not materialize legacy runtime assets.
 - [Publishing a Framework release](docs/developer/framework-release.md)
 - [Dependency policy](docs/developer/dependency-policy.md)
 - [Icon subset generator](docs/developer/icon-subsets.md)
+- [Usage records and reconcile (simai.linkage)](docs/developer/linkage-reconcile.md)
 - [Migration from the legacy builder](docs/developer/migration-from-sf5-webpack.md)
 - [Contributing](CONTRIBUTING.md)
 

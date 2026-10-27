@@ -1,0 +1,122 @@
+{
+  "schema": "simai.framework.unit-usage",
+  "schema_version": 1,
+  "consumer": {
+    "id": "fixture-kit",
+    "kind": "figma-kit"
+  },
+  "sources": [
+    {
+      "source": "simai/ui-source",
+      "release": "ui-aaaaaaaaaaaa"
+    }
+  ],
+  "places": [
+    {
+      "place": "figma:1:1 Specimen",
+      "units": [
+        {
+          "id": "font.inter",
+          "version": "1.0.0",
+          "content_sha256": "2884ff7a2bc95eb804ad7220543cf54799ce07fe8c2afa4b24fc0f5cbb25bcbf"
+        }
+      ]
+    },
+    {
+      "place": "figma:1:2 Icon",
+      "units": [
+        {
+          "id": "smart.icon",
+          "version": "1.0.0",
+          "content_sha256": "d611999ad528a58f232b92cf098fa850835aed790f1df32828e35a6381f1c0b0"
+        }
+      ]
+    },
+    {
+      "place": "figma:1:3 Chip",
+      "units": [
+        {
+          "id": "smart.chip",
+          "version": "1.0.0",
+          "content_sha256": "a485b1bdfb753dca66e149f5450771a68ecc90400cd585c8aef7f473f5a66c3d"
+        }
+      ]
+    },
+    {
+      "place": "figma:1:4 Button",
+      "units": [
+        {
+          "id": "smart.button",
+          "version": "1.4.0",
+          "content_sha256": "f9f92b20f6056b267f6e73e2ed2aaafd978ce9abe236f64444caccbc92cc344a"
+        }
+      ]
+    },
+    {
+      "place": "docs:/components/select.md",
+      "note": "the select page",
+      "units": [
+        {
+          "id": "smart.select",
+          "version": "1.2.0",
+          "content_sha256": "0d763eff3ddcd6ad262b54e7a8f993690331daced051efa952469324003c9abf"
+        }
+      ]
+    },
+    {
+      "place": "figma:1:6 Input (old id)",
+      "units": [
+        {
+          "id": "smart.inputs",
+          "version": "1.2.0",
+          "content_sha256": "859010ed96267370f512c9311e6f2fbf8e87f01cacbbf66d0bcbd33b53bd3b40"
+        }
+      ]
+    },
+    {
+      "place": "figma:1:7 Tree",
+      "units": [
+        {
+          "id": "smart.tree",
+          "version": "1.0.0",
+          "content_sha256": "383ffdf5e3239b382eaa5facdc51de336f7a983c19d491bbbfa28699af25209d"
+        }
+      ]
+    },
+    {
+      "place": "figma:1:8 Toggle (removed id)",
+      "units": [
+        {
+          "id": "smart.toggles",
+          "version": "1.0.0",
+          "content_sha256": "e63cb7ffd13fcc1b6c7eb166b010c2c8c5148935d721b502e49fefc4659bb8b6"
+        }
+      ]
+    },
+    {
+      "place": "figma:1:9 Card",
+      "units": [
+        {
+          "id": "component.card",
+          "version": "1.0.0",
+          "content_sha256": "ff683609dbb1bdcde6ed09765ed9b0e6fff9680e30f1952f9dd455926356d161"
+        }
+      ]
+    },
+    {
+      "place": "project:src/pages/list.html",
+      "units": [
+        {
+          "id": "utility.gap",
+          "version": "1.0.0",
+          "content_sha256": "67a71ac3c6c42e4daa281bdb1a005c0c865b8ca7f2a5c8176fb5e9de4ec67197"
+        },
+        {
+          "id": "font.inter",
+          "version": "1.0.0",
+          "content_sha256": "2884ff7a2bc95eb804ad7220543cf54799ce07fe8c2afa4b24fc0f5cbb25bcbf"
+        }
+      ]
+    }
+  ]
+}

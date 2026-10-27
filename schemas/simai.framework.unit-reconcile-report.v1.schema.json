@@ -1,0 +1,418 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/simai/ui-builder/schemas/simai.framework.unit-reconcile-report.v1.schema.json",
+  "x-simai-version": "1.0.0",
+  "title": "SIMAI Framework unit reconcile report",
+  "description": "A usage record compared with one or more release inventories (standard simai.linkage 1.0.0, requirements 14-15): one status for every unit of every place, and for a place the worst of its units'. Written by scripts/reconcile.mjs; tools build on it (the Figma drift report, a docs checklist, a project upgrade list). It never changes the consumer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "checked_on",
+    "consumer",
+    "record_sources",
+    "inventories",
+    "since",
+    "journal",
+    "status",
+    "totals",
+    "places",
+    "notes"
+  ],
+  "$defs": {
+    "status": {
+      "enum": [
+        "current",
+        "update-available",
+        "former-name",
+        "action-needed",
+        "missing"
+      ],
+      "description": "current: hash equal. update-available: newer patch or minor, or the hash moved without the version. former-name: the id is a former id of an inventory unit (still works until the journal's date). action-needed: a major step, or a journal entry between the versions asks for a change. missing: no such unit and no unit took its name."
+    },
+    "journal": {
+      "type": "object",
+      "required": [
+        "id",
+        "instruction"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "recorded_on": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stage": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "type": "string"
+        },
+        "remove_after": {
+          "type": "string"
+        },
+        "instruction": {
+          "type": "string",
+          "description": "Quoted from the journal entry: its manual instruction, else its summary and example."
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "required": [
+        "source",
+        "release",
+        "revision"
+      ],
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "release": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  },
+  "properties": {
+    "schema": {
+      "const": "simai.framework.unit-reconcile-report"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "checked_on": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "The day the report was made; a former name is expired after its date."
+    },
+    "consumer": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        }
+      }
+    },
+    "record_sources": {
+      "type": "array",
+      "description": "The record's sources as it gave them."
+    },
+    "inventories": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/identity"
+      },
+      "description": "The target inventories."
+    },
+    "since": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/identity"
+      },
+      "description": "The inventories of the record's releases that foundations were compared with."
+    },
+    "journal": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "records": {
+          "type": "integer"
+        }
+      }
+    },
+    "status": {
+      "$ref": "#/$defs/status"
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "places",
+        "units"
+      ],
+      "properties": {
+        "places": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "current",
+            "update-available",
+            "former-name",
+            "action-needed",
+            "missing"
+          ],
+          "properties": {
+            "current": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "update-available": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "former-name": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "action-needed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "missing": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "units": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "current",
+            "update-available",
+            "former-name",
+            "action-needed",
+            "missing"
+          ],
+          "properties": {
+            "current": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "update-available": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "former-name": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "action-needed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "missing": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "places": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "place",
+          "status",
+          "units"
+        ],
+        "properties": {
+          "place": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/$defs/status"
+          },
+          "units": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "version",
+                "content_sha256",
+                "status"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "string"
+                },
+                "content_sha256": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "status": {
+                  "$ref": "#/$defs/status"
+                },
+                "current": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "version",
+                    "content_sha256"
+                  ],
+                  "description": "The unit as the inventory carries it (under its new id for a former name).",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "content_sha256": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "step": {
+                  "enum": [
+                    "major",
+                    "minor",
+                    "patch"
+                  ]
+                },
+                "reasons": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "former": {
+                  "type": "object",
+                  "required": [
+                    "to",
+                    "version",
+                    "journal",
+                    "until",
+                    "instruction"
+                  ],
+                  "properties": {
+                    "to": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "journal": {
+                      "type": "string"
+                    },
+                    "until": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "The date the former id stops working (remove_after), or the date it was removed."
+                    },
+                    "expired": {
+                      "type": "boolean"
+                    },
+                    "instruction": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "journal": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/journal"
+                  }
+                },
+                "via": {
+                  "type": "array",
+                  "description": "Foundations the unit reaches through the inventory's dependencies that moved since the record's release.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "kind",
+                      "from_version",
+                      "to_version",
+                      "step",
+                      "status"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string"
+                      },
+                      "from_version": {
+                        "type": "string"
+                      },
+                      "to_version": {
+                        "type": "string"
+                      },
+                      "step": {
+                        "enum": [
+                          "major",
+                          "minor",
+                          "patch",
+                          "none"
+                        ]
+                      },
+                      "status": {
+                        "$ref": "#/$defs/status"
+                      },
+                      "journal": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/$defs/journal"
+                        }
+                      },
+                      "reasons": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "foundations": {
+                  "const": "unchecked",
+                  "description": "Present when no inventory of the record's release and no change report was given."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

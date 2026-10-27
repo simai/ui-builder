@@ -1,0 +1,130 @@
+{
+  "schema": "simai.framework.unit-inventory",
+  "schema_version": 1,
+  "source": "simai/ui-source",
+  "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "release": "ui-bbbbbbbbbbbb",
+  "units": [
+    {
+      "id": "component.badge",
+      "kind": "component",
+      "version": "1.0.0",
+      "content_sha256": "c943ae1000b30cf5af3938a5c3e624aa1788188bc6dbede0b57231c1bdf17fa5",
+      "dependencies": [
+        {
+          "id": "tokens.colour",
+          "range": "^1.0.0"
+        }
+      ]
+    },
+    {
+      "id": "component.card",
+      "kind": "component",
+      "version": "1.0.0",
+      "content_sha256": "ff683609dbb1bdcde6ed09765ed9b0e6fff9680e30f1952f9dd455926356d161",
+      "dependencies": [
+        {
+          "id": "component.badge",
+          "range": "^1.0.0"
+        }
+      ]
+    },
+    {
+      "id": "font.inter",
+      "kind": "font",
+      "version": "1.0.0",
+      "content_sha256": "2884ff7a2bc95eb804ad7220543cf54799ce07fe8c2afa4b24fc0f5cbb25bcbf",
+      "dependencies": []
+    },
+    {
+      "id": "smart.button",
+      "kind": "smart",
+      "version": "2.0.0",
+      "content_sha256": "12959148db904302372f75b3f99e5f04409eef292ed3592442ed5c6e2627b106",
+      "dependencies": [
+        {
+          "id": "tokens.space",
+          "range": "^1.0.0"
+        }
+      ]
+    },
+    {
+      "id": "smart.chip",
+      "kind": "smart",
+      "version": "1.0.0",
+      "content_sha256": "dfdd3efef30c8dc866143beaac8bb3286c9af0f112610681daa142e77db18ad9",
+      "dependencies": []
+    },
+    {
+      "id": "smart.icon",
+      "kind": "smart",
+      "version": "1.0.1",
+      "content_sha256": "d09612574962152e7ea215cfe083aaf5a5d18e165b6e31d1dbedb92eed5eebc8",
+      "dependencies": []
+    },
+    {
+      "id": "smart.input",
+      "kind": "smart",
+      "version": "1.3.0",
+      "content_sha256": "cb8e0c578a4f8487e767b73d9753a2a8762f3892158bf65afe678320540ea8f1",
+      "dependencies": []
+    },
+    {
+      "id": "smart.select",
+      "kind": "smart",
+      "version": "1.3.0",
+      "content_sha256": "4d6711b09be807d455f4c3e9dcc21774de3b8fefbd56369dd6c51f7925784d0a",
+      "dependencies": []
+    },
+    {
+      "id": "smart.switch",
+      "kind": "smart",
+      "version": "1.0.0",
+      "content_sha256": "a419063a1c16d4853a3b6831e21b20ae257fae39afd0aef0788b561d9353ff46",
+      "dependencies": []
+    },
+    {
+      "id": "tokens.colour",
+      "kind": "tokens",
+      "version": "1.1.0",
+      "content_sha256": "dd0f2b6a31f30a30fe59ca37e5d2386fd63e3eb808823453ce5b6467c82cb294",
+      "dependencies": [
+        {
+          "id": "tokens.elevation",
+          "range": "^1.0.0"
+        }
+      ]
+    },
+    {
+      "id": "tokens.elevation",
+      "kind": "tokens",
+      "version": "1.0.0",
+      "content_sha256": "a3c2c9af3d10c5018d61d683cc1fc88b7d5a0478a114c9683a98bb49cfba6db6",
+      "dependencies": [
+        {
+          "id": "tokens.colour",
+          "range": "^1.0.0"
+        }
+      ]
+    },
+    {
+      "id": "tokens.space",
+      "kind": "tokens",
+      "version": "2.0.0",
+      "content_sha256": "469ca2ee1addb920c40b8dd648a0cd28f8ec3f4aead72979a406e5da4c4aaf5c",
+      "dependencies": []
+    },
+    {
+      "id": "utility.gap",
+      "kind": "utility",
+      "version": "1.0.0",
+      "content_sha256": "67a71ac3c6c42e4daa281bdb1a005c0c865b8ca7f2a5c8176fb5e9de4ec67197",
+      "dependencies": [
+        {
+          "id": "tokens.space",
+          "range": "^1.0.0"
+        }
+      ]
+    }
+  ]
+}

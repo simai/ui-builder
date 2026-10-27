@@ -99,6 +99,16 @@ without `ui-smart` once no consumer reads it.
 `runtime_tree` and `archive_sha256` describe the commit that wrote each tree, as
 in v1. `mirror` and `pair` are present only while `ui-smart` is mirrored.
 
+## Unit inventory and change report
+
+When the source has `scripts/linkage.mjs` (standard `simai.linkage`), the
+release also writes `contracts/releases/ui-<R12>.inventory.json` (every unit
+with its id, version, content hash and dependencies) and, when an earlier
+inventory exists, `ui-<R12>.changes.json` beside the lock, and the publish
+stops before anything is committed when a unit's hash moved without a version
+bump. Consumers compare their usage records with these files:
+[Usage records and reconcile](linkage-reconcile.md).
+
 ## Product component packages
 
 A product's own Smart components are built over the ui-source revision a free

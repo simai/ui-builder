@@ -6,6 +6,19 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Added
 
+- Usage records and reconcile (standard `simai.linkage` 1.0.0, requirements
+  11-16): `schemas/simai.framework.unit-usage.v1.schema.json` (a consumer's
+  sources, releases and places with unit id, version and content hash),
+  `schemas/simai.framework.unit-reconcile-report.v1.schema.json`, and
+  `scripts/reconcile.mjs` (bin `sf-reconcile`, Node.js only): `reconcile`
+  compares a record with one or more inventories (path, URL, or a release id
+  under `--releases`) and gives every unit of every place `current`,
+  `update-available`, `former-name`, `action-needed` or `missing`, with the
+  foundations it reaches through the inventory's dependencies (`via`), former
+  ids and their dates and quoted instructions from the change journal; `record`
+  starts a record from an inventory. `yarn test:linkage`.
+- Every Framework release publishes its unit inventory and change report
+  (`ui/contracts/releases/ui-<12>.inventory.json`, `.changes.json`).
 - The npm package the builder packs names its author: `author` is
   `Rim Zabarov`, the author and sole rightholder of the products (owner
   decision, 2026-10-23). The package carried no author before.
