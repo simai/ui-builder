@@ -21,7 +21,7 @@ Two layouts:
   ``pair``, and a v1 alias lock is written under that pair id, because v1
   readers (ui-admin's pin) resolve a release by the ui-smart commit.
 """
-import argparse,hashlib,importlib.util,json,re,subprocess
+import argparse,copy,hashlib,importlib.util,json,re,subprocess
 from pathlib import Path
 
 UI='simai/ui'
@@ -176,6 +176,14 @@ def sync_smart_entries(manifest,ui_root,smart_revision,release,source_root,sourc
  curated plan has: discoverable, not suggested, curated for nothing. Existing
  entries, and every curated decision in them, are left as they are; the
  owner promotes a new entry by hand. inventory.expected is recounted.
+
+ A component whose folder and rule were renamed (sf-input: inputs/cl-inputs ->
+ input/cl-input, and its id smart.inputs -> smart.input) is one component, not
+ one dropped and one new: an added entry whose tags are a dropped entry's takes
+ that entry's curated decisions (title, lifecycle, readiness, examples,
+ curated_for), and every other entry that required the old id requires the new
+ one. `requires` itself is a fact of the rule, as the registry checks it
+ (smart_rule_relations_mismatch), so it is recounted for every entry.
  """
  files=smart_tree_files(ui_root,smart_revision,SMART_TREE)
  folders={path[len(SMART_TREE)+1:].split('/',1)[0] for path in files}
@@ -190,8 +198,12 @@ def sync_smart_entries(manifest,ui_root,smart_revision,release,source_root,sourc
  def assets_of(name):
   folder=SMART_TREE+'/'+name+'/'
   return sorted((path for path in files if path.startswith(folder) and '/' in path[len(folder):] and not path.endswith('.gz')),key=lambda path:path.split('/'))
- kept=[{**entry,'runtime':{**entry['runtime'],'asset_paths':[UI+'@'+smart_revision+':'+path for path in assets_of(entry['runtime']['rule_name'][3:])]}} for entry in kept]
- removed=[entry['id'] for entry in manifest['entries'] if entry['runtime'].get('rule_name') not in shipped]
+ def requires_of(rule):
+  return sorted(set(relation_id(item['name'],rule_kinds) for item in rule.get('relation',[])))
+ kept=[{**entry,'runtime':{**entry['runtime'],'asset_paths':[UI+'@'+smart_revision+':'+path for path in assets_of(entry['runtime']['rule_name'][3:])]},
+  'requires':requires_of(shipped[entry['runtime']['rule_name']])} for entry in kept]
+ dropped=[entry for entry in manifest['entries'] if entry['runtime'].get('rule_name') not in shipped]
+ removed=[entry['id'] for entry in dropped]
  claimed={entry['runtime'].get('rule_name') for entry in kept}
  added=[]
  for rule_name in sorted(set(shipped)-claimed):
@@ -212,13 +224,21 @@ def sync_smart_entries(manifest,ui_root,smart_revision,release,source_root,sourc
    'example_refs':[],
    'runtime':{'rule_name':rule_name,'tags':list(rule.get('tags',[])),'asset_paths':[UI+'@'+smart_revision+':'+path for path in assets],
     'declared':{'js':bool(rule.get('js',False)),'css':bool(rule.get('css',False))}},
-   'requires':sorted(relation_id(item['name'],rule_kinds) for item in rule.get('relation',[])),
+   'requires':requires_of(rule),
    'curated_for':[],
   })
+  tags=sorted(rule.get('tags',[]))
+  renamed=[entry for entry in dropped if tags and sorted(entry['runtime'].get('tags',[]))==tags]
+  if len(renamed)==1:
+   for key in ('title','lifecycle','readiness','example_refs','curated_for'):
+    added[-1][key]=copy.deepcopy(renamed[0][key])
+   added[-1]['renamed_from']=renamed[0]['id']
+ renames={entry.pop('renamed_from'):entry['id'] for entry in added if 'renamed_from' in entry}
+ for old,new in renames.items():print('Renamed in the ui Smart owner manifest (curated decisions kept): '+old+' -> '+new)
  manifest=dict(manifest)
  manifest['entries']=kept+added
  manifest['inventory']=dict(manifest['inventory'],expected=len(manifest['entries']))
- return manifest,[entry['id'] for entry in added],removed
+ return manifest,[entry['id'] for entry in added if entry['id'] not in renames.values()],[public_id for public_id in removed if public_id not in renames]
 
 
 def verify(root,item,label):
