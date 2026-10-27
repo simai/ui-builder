@@ -208,7 +208,7 @@ function materializeSourceAssets(plan)
 
             if (!SOURCE_ASSET_EXTENSIONS.has(extension) && !normativeAssets.has(canonicalSource)
                 && !(extension === ".mjs"
-                    && /^core\/js\/composition\/[A-Za-z0-9._-]+\.mjs$/u.test(portableRelativePath)))
+                    && /^core\/js\/(?:composition|assembly)\/[A-Za-z0-9._-]+\.mjs$/u.test(portableRelativePath)))
             {
                 continue;
             }
@@ -236,7 +236,9 @@ function materializeSourceAssets(plan)
     // What a shipped module imports by a relative path ships with it, and what
     // that imports, so the source modules work where they are laid: the
     // composition modules import ../page-language.js and their own
-    // schema-name.mjs (2026-10-18). Only scripts under the source root.
+    // schema-name.mjs (2026-10-18); the assembly modules (SF.Assembly,
+    // 2026-10-27) import ../page-language.js too. Only scripts under the
+    // source root.
     const queue = copied.filter((file) => path.extname(file).toLowerCase() === ".mjs");
 
     while (queue.length)
@@ -613,7 +615,8 @@ function normalizeGeneratedTextWhitespace(outputRoot)
 }
 
 // Every relative import of a module the distribution ships as source (the
-// composition modules under core/js/composition) resolves to a file the
+// composition modules under core/js/composition and the assembly modules
+// under core/js/assembly) resolves to a file the
 // distribution holds. ui-1cb0739a8423 shipped composition modules importing
 // ../schema-name.mjs, a file the copy rule did not ship, and every consumer
 // that imported them failed with ERR_MODULE_NOT_FOUND (DEV, 2026-10-18).

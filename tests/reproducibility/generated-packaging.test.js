@@ -84,12 +84,14 @@ test("generated packaging materializes source assets, empty URL compatibility an
     }
 });
 
-test("Core packaging publishes only the Composition ESM runtime", () => {
+test("Core packaging publishes only the Composition and Assembly ESM runtimes", () => {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "sf-composition-packaging-"));
     const sourceRoot = path.join(workspace, "source");
     const outputRoot = path.join(workspace, "output");
     const input = writeFile(sourceRoot, "core/js/index.js", "export {};\n");
     writeFile(sourceRoot, "core/js/composition/index.mjs", "export const Composition = {};\n");
+    writeFile(sourceRoot, "core/js/assembly/index.mjs", "export const Assembly = {};\n");
+    writeFile(sourceRoot, "core/js/other/private.mjs", "export {};\n");
     writeFile(sourceRoot, "core/contracts/checks/private.mjs", "throw new Error('not public');\n");
     fs.mkdirSync(outputRoot, { recursive: true });
     writeFile(outputRoot, ".compat/utility-full/css/utility.full.css", "");
@@ -105,8 +107,12 @@ test("Core packaging publishes only the Composition ESM runtime", () => {
 
         assert.equal(fs.readFileSync(runtime, "utf8"), "export const Composition = {};\n");
         assert.deepEqual(zlib.gunzipSync(fs.readFileSync(`${runtime}.gz`)), fs.readFileSync(runtime));
+        const assembly = path.join(outputRoot, "core/js/assembly/index.mjs");
+
+        assert.equal(fs.readFileSync(assembly, "utf8"), "export const Assembly = {};\n");
         assert.equal(fs.existsSync(path.join(outputRoot, "core/contracts/checks/private.mjs")), false);
-        assert.deepEqual(result.sourceAssets, [runtime]);
+        assert.equal(fs.existsSync(path.join(outputRoot, "core/js/other/private.mjs")), false);
+        assert.deepEqual([...result.sourceAssets].sort(), [assembly, runtime].sort());
     }
     finally
     {
