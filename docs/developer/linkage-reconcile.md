@@ -115,14 +115,20 @@ From best to worst:
 | `action-needed` | a major step (below 1.0.0, a minor one), or a journal entry between the two versions asks for a change -- its instruction is quoted |
 | `missing` | the inventory has no such unit and no unit took its name, or the former name was removed |
 
-**Foundations.** Reconcile follows the target inventory's dependencies of the
-unit transitively (cycles included) and compares every token set, font and
-icon set it reaches with the baseline. A foundation that moved adds a `via`
-entry -- `{id, kind, from_version, to_version, step, status}` -- and the unit
-takes the worse of its own status and the via's: `update-available` for a
-patch or minor, `action-needed` for a major or a journal entry of the
-foundation. So a changed `tokens.colour` marks every place drawn with it even
-when the unit's own hash is equal.
+**Foundations.** A unit's foundations are the token sets, fonts and icon sets
+it names as dependencies in the target inventory, plus those of the units it
+depends on, transitively (cycles included) -- but never through shared
+infrastructure: units of kind `core` (`core.runtime`, `core.styles`) and
+`module` are not followed, because every unit loads them and through them
+every token set would mark every place. Each foundation is compared with the
+baseline; one that moved adds a `via` entry -- `{id, kind, from_version,
+to_version, step, status, chain}`, where `chain` is the shortest dependency
+path from the unit to the foundation -- and the unit takes the worse of its
+own status and the via's: `update-available` for a patch or minor,
+`action-needed` for a major or a journal entry of the foundation. So a changed
+`tokens.colour` marks every place drawn with a unit that reads it, even when
+the unit's own hash is equal, and leaves a unit that reads only `tokens.space`
+alone.
 
 **Journal entries.** A record of the change journal applies to a unit when it
 names it:

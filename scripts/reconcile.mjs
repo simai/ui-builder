@@ -25,10 +25,13 @@
 //   missing           the inventory has no such unit and no unit took its name.
 //
 // Foundations count (requirement 13): a place's unit also depends on the
-// token sets, fonts and icon sets it reaches through the inventory's
-// dependencies, transitively. A foundation that moved between the record's
-// release and the target marks the unit `via` that foundation, by the
-// foundation's own step, even when the unit's hash is equal. To see what a
+// token sets, fonts and icon sets it names as dependencies, and on those of
+// the units it depends on, transitively -- but not through shared
+// infrastructure (core.runtime, core.styles, module.*), which every unit
+// loads and no place draws with: through it every token set would mark every
+// place. A foundation that moved between the record's release and the target
+// marks the unit `via` that foundation, by the foundation's own step and with
+// the dependency chain that reached it, even when the unit's hash is equal. To see what a
 // foundation was, reconcile reads the inventory of the record's release
 // (--since, or the record's release resolved like --inventory) or the change
 // reports between the two (--changes).
@@ -56,6 +59,8 @@ export const CONSUMER_KINDS = Object.freeze(["figma-kit", "docs", "product", "pr
 export const STATUSES = Object.freeze(["current", "update-available", "former-name", "action-needed", "missing"]);
 // The kinds the standard calls foundations: shared values other units read.
 export const FOUNDATION_KINDS = Object.freeze(["tokens", "font", "icons"]);
+// Shared infrastructure: its dependencies are not a place's foundations.
+export const INFRASTRUCTURE_KINDS = Object.freeze(["core", "module"]);
 
 const ID = /^[a-z][a-z0-9-]*\.[a-z0-9][a-z0-9.-]*$/u;
 const VERSION = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/u;
@@ -409,25 +414,32 @@ export function journalBetween(index, id, used, target, broughtUpOn)
 // ---------------------------------------------------------------------------
 // Reconcile.
 
-/** Every unit an id reaches through the inventory's dependencies, without itself. */
+/**
+ * Every unit an id reaches through the inventory's dependencies, without
+ * itself, each with the shortest chain that reaches it (id first). Shared
+ * infrastructure (core, module) is neither entered nor returned: what it
+ * depends on is not what the unit draws with.
+ */
 export function closure(byId, id)
 {
-    const seen = new Set([id]);
+    const chains = new Map([[id, [id]]]);
     const queue = [id];
     while (queue.length)
     {
-        const unit = byId.get(queue.shift());
-        for (const dependency of unit?.dependencies ?? [])
+        const current = queue.shift();
+        for (const dependency of byId.get(current)?.dependencies ?? [])
         {
-            if (!seen.has(dependency.id))
+            const unit = byId.get(dependency.id);
+            if (chains.has(dependency.id) || (unit && INFRASTRUCTURE_KINDS.includes(unit.kind)))
             {
-                seen.add(dependency.id);
-                queue.push(dependency.id);
+                continue;
             }
+            chains.set(dependency.id, [...chains.get(current), dependency.id]);
+            queue.push(dependency.id);
         }
     }
-    seen.delete(id);
-    return [...seen].sort();
+    chains.delete(id);
+    return new Map([...chains].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 }
 
 /** The earliest from-version and latest to-version of every unit across change reports. */
@@ -610,7 +622,7 @@ function reconcileUnit(used, context)
     if (foundations)
     {
         const via = [];
-        for (const dependency of closure(inventory.byId, id))
+        for (const [dependency, chain] of closure(inventory.byId, id))
         {
             const unit = inventory.byId.get(dependency);
             if (!unit || !FOUNDATION_KINDS.includes(unit.kind))
@@ -620,6 +632,7 @@ function reconcileUnit(used, context)
             const move = foundationMove(dependency, inventory, foundations);
             if (move)
             {
+                move.chain = chain;
                 via.push(move);
             }
         }
@@ -795,7 +808,7 @@ export function summarize(report)
             }
             for (const via of unit.via ?? [])
             {
-                lines.push(`    via ${via.id} ${via.from_version} -> ${via.to_version} (${via.step}): ${via.status}`);
+                lines.push(`    via ${via.id} ${via.from_version} -> ${via.to_version} (${via.step}): ${via.status}${via.chain?.length > 2 ? ` [${via.chain.join(" > ")}]` : ""}`);
                 for (const entry of via.journal ?? [])
                 {
                     lines.push(`      journal ${entry.id} (${entry.recorded_on}): "${entry.instruction}"`);

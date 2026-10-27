@@ -127,13 +127,34 @@ test("a changed foundation marks a unit whose own hash is equal, transitively, w
     // component.card -> component.badge -> tokens.colour (minor): its own hash is equal.
     assert.equal(card.current.content_sha256, card.content_sha256);
     assert.equal(card.status, "update-available");
-    assert.deepEqual(card.via, [{ id: "tokens.colour", kind: "tokens", from_version: "1.0.0", to_version: "1.1.0", step: "minor", status: "update-available" }]);
+    assert.deepEqual(card.via, [{ id: "tokens.colour", kind: "tokens", from_version: "1.0.0", to_version: "1.1.0", step: "minor", status: "update-available", chain: ["component.card", "component.badge", "tokens.colour"] }]);
 
     const gap = unitOf(report, "project:src/pages/list.html", "utility.gap");
     assert.equal(gap.status, "action-needed");
     assert.deepEqual(gap.via.map((via) => [via.id, via.step, via.status]), [["tokens.space", "major", "action-needed"]]);
     assert.equal(report.places.find((place) => place.place === "project:src/pages/list.html").status, "action-needed");
     assert.match(summarize(report), /via tokens\.space 1\.0\.0 -> 2\.0\.0 \(major\): action-needed/u);
+    assert.match(summarize(report), /via tokens\.colour 1\.0\.0 -> 1\.1\.0 \(minor\): update-available \[component\.card > component\.badge > tokens\.colour\]/u);
+});
+
+test("only tokens.colour moved: a unit that reads it is marked, one that reads only tokens.space is not", () => {
+    // ui-cccccccccccc is ui-aaaaaaaaaaaa with tokens.colour 1.0.0 -> 1.1.0 and nothing else.
+    const C = fixture("ui-cccccccccccc.inventory.json");
+    const record = recordFrom(A, { units: ["component.alert"], place: "reads space", base: recordFrom(A, { units: ["component.badge"], place: "reads colour" }) });
+    record.places.push({ place: "space via a utility", units: [USAGE.places.at(-1).units[0]] });
+    const report = reconcile(record, [C], { since: [A], today: TODAY });
+
+    const badge = unitOf(report, "reads colour", "component.badge");
+    assert.equal(badge.status, "update-available");
+    assert.deepEqual(badge.via.map((via) => [via.id, via.chain]), [["tokens.colour", ["component.badge", "tokens.colour"]]]);
+
+    // component.alert reads tokens.space directly and reaches tokens.colour only
+    // through core.runtime -> core.styles and module.shared: it is not marked.
+    const alert = unitOf(report, "reads space", "component.alert");
+    assert.equal(alert.status, "current");
+    assert.equal(alert.via, undefined);
+    assert.equal(unitOf(report, "space via a utility", "utility.gap").status, "current");
+    assert.deepEqual(report.totals.places, { current: 2, "update-available": 1, "former-name": 0, "action-needed": 0, missing: 0 });
 });
 
 test("a foundation's own journal entry makes the via action-needed and is quoted", () => {
@@ -178,8 +199,14 @@ test("versions, steps and the dependency closure with a cycle", () => {
     assert.equal(versionStep("0.2.0", "0.3.0"), "major");
     assert.equal(versionStep("1.2.3", "1.2.4"), "patch");
     const byId = new Map(A.units.map((unit) => [unit.id, unit]));
-    assert.deepEqual(closure(byId, "component.card"), ["component.badge", "tokens.colour", "tokens.elevation"]);
-    assert.deepEqual(closure(byId, "tokens.colour"), ["tokens.elevation"]);
+    assert.deepEqual([...closure(byId, "component.card")], [
+        ["component.badge", ["component.card", "component.badge"]],
+        ["tokens.colour", ["component.card", "component.badge", "tokens.colour"]],
+        ["tokens.elevation", ["component.card", "component.badge", "tokens.colour", "tokens.elevation"]],
+    ]);
+    assert.deepEqual([...closure(byId, "tokens.colour").keys()], ["tokens.elevation"]);
+    // core.runtime, core.styles and module.shared are neither entered nor returned.
+    assert.deepEqual([...closure(byId, "component.alert").keys()], ["tokens.space"]);
 });
 
 test("record starts a usage record and adds places to it", () => {

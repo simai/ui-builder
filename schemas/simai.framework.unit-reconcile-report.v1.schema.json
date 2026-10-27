@@ -348,7 +348,7 @@
                 },
                 "via": {
                   "type": "array",
-                  "description": "Foundations the unit reaches through the inventory's dependencies that moved since the record's release.",
+                  "description": "Foundations (token sets, fonts, icon sets) the unit names as dependencies, or reaches through other units' dependencies -- never through core or module units -- that moved since the record's release.",
                   "items": {
                     "type": "object",
                     "required": [
@@ -357,7 +357,8 @@
                       "from_version",
                       "to_version",
                       "step",
-                      "status"
+                      "status",
+                      "chain"
                     ],
                     "properties": {
                       "id": {
@@ -394,6 +395,14 @@
                         "items": {
                           "type": "string"
                         }
+                      },
+                      "chain": {
+                        "type": "array",
+                        "minItems": 2,
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "The shortest dependency chain from the unit to the foundation, both included."
                       }
                     }
                   }

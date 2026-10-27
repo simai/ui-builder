@@ -6,6 +6,26 @@
   "release": "ui-bbbbbbbbbbbb",
   "units": [
     {
+      "id": "component.alert",
+      "kind": "component",
+      "version": "1.0.0",
+      "content_sha256": "d5aef42b43fe52ad14968e64ee084d11609c3e290363d44647478e6c0f1ab6e8",
+      "dependencies": [
+        {
+          "id": "core.runtime",
+          "range": "^1.0.0"
+        },
+        {
+          "id": "module.shared",
+          "range": "^1.0.0"
+        },
+        {
+          "id": "tokens.space",
+          "range": "^1.0.0"
+        }
+      ]
+    },
+    {
       "id": "component.badge",
       "kind": "component",
       "version": "1.0.0",
@@ -30,11 +50,51 @@
       ]
     },
     {
+      "id": "core.runtime",
+      "kind": "core",
+      "version": "1.0.0",
+      "content_sha256": "8544fc948c6b898e94ca937744b1f7604fea72dc9ba3675312806cbad04cbe6a",
+      "dependencies": [
+        {
+          "id": "core.styles",
+          "range": "^1.0.0"
+        }
+      ]
+    },
+    {
+      "id": "core.styles",
+      "kind": "core",
+      "version": "1.0.0",
+      "content_sha256": "8cefb6e8fe099293a2cc5252ba59070b322f0b7a02034fe8a6c3832504555544",
+      "dependencies": [
+        {
+          "id": "tokens.colour",
+          "range": "^1.0.0"
+        },
+        {
+          "id": "tokens.space",
+          "range": "^1.0.0"
+        }
+      ]
+    },
+    {
       "id": "font.inter",
       "kind": "font",
       "version": "1.0.0",
       "content_sha256": "2884ff7a2bc95eb804ad7220543cf54799ce07fe8c2afa4b24fc0f5cbb25bcbf",
       "dependencies": []
+    },
+    {
+      "id": "module.shared",
+      "kind": "module",
+      "version": "1.0.0",
+      "content_sha256": "9fcdc8135d477691d69fbcae9d95dc16ca740f07f1846b987c9cb611e99fd082",
+      "dependencies": [
+        {
+          "id": "tokens.colour",
+          "range": "^1.0.0"
+        }
+      ]
     },
     {
       "id": "smart.button",
