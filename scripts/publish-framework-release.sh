@@ -20,13 +20,21 @@
 #   2. Commits ui ("Build: <subject>"): that commit is the release, ui-<12>.
 #      Commits ui-smart when its Smart bytes moved.
 #   3. Writes the receipt (write-release-receipt.py).
-#   4. Binds the owner manifests (phase owners); commits the mirror's metadata.
-#   5. Writes the release lock v2, and the v1 alias lock while mirrored
-#      (phase reference).
-#   6. Runs ui/scripts/release-gate.sh (builds and checks the registry, runs the
+#   4. simai.linkage (when the source has scripts/linkage.mjs): writes the unit
+#      inventory of the source commit to ui/contracts/releases/ui-<12>.inventory.json
+#      and, when an earlier release of ui HEAD carries an inventory, the change
+#      report against the newest one to ui/contracts/releases/ui-<12>.changes.json.
+#      The passports and the hash-moves-version rule are checked before anything
+#      is laid down: a unit whose hash moved without a version bump stops the
+#      publish there.
+#   5. Binds the owner manifests (phase owners); commits the mirror's metadata.
+#   6. Writes the release lock v2, and the v1 alias lock while mirrored
+#      (phase reference); the lock points at the inventory (`unit_inventory`:
+#      path, sha256, change report) when ui's lock validator accepts the field.
+#   7. Runs ui/scripts/release-gate.sh (builds and checks the registry, runs the
 #      registry suite and the release-lock checks). Red: nothing more is
 #      committed and the bind is left in the ui worktree to inspect.
-#   7. Adds the changelog entry and commits "Bind the registry to the release ui-<12>".
+#   8. Adds the changelog entry and commits "Bind the registry to the release ui-<12>".
 #
 # Both checkouts must be clean before it starts: it commits what it lays down
 # and nothing else.
@@ -87,6 +95,29 @@ done
 
 step() { printf '\n== %s\n' "$*"; }
 
+# simai.linkage: a source from before the standard has no linkage script.
+LINKAGE="$SOURCE/scripts/linkage.mjs"
+[ -f "$LINKAGE" ] || LINKAGE=''
+# The newest release of ui HEAD whose inventory ui HEAD carries; read from
+# HEAD, the checkout being clean.
+PREVIOUS_INVENTORY='' PREVIOUS_ID=''
+if [ -n "$LINKAGE" ]; then
+    inventories="$(git -C "$UI" ls-tree --name-only HEAD contracts/releases/ | grep '\.inventory\.json$' || true)"
+    if [ -n "$inventories" ]; then
+        for writer in $(git -C "$UI" log --format=%H HEAD -- distr); do
+            if printf '%s\n' "$inventories" | grep -qxF "contracts/releases/ui-${writer:0:12}.inventory.json"; then
+                PREVIOUS_ID="ui-${writer:0:12}"
+                PREVIOUS_INVENTORY="$WORK/$PREVIOUS_ID.inventory.json"
+                git -C "$UI" show "HEAD:contracts/releases/$PREVIOUS_ID.inventory.json" > "$PREVIOUS_INVENTORY"
+                break
+            fi
+        done
+    fi
+    step "simai.linkage passports${PREVIOUS_ID:+ against $PREVIOUS_ID}"
+    node "$LINKAGE" passports --check --rev "$SOURCE_REVISION" ${PREVIOUS_INVENTORY:+--previous "$PREVIOUS_INVENTORY"} \
+        || fail "simai.linkage is red for ui-source ${SOURCE_REVISION:0:12}: nothing was laid down"
+fi
+
 step 'lay the build output'
 for pair in "${LAYOUT[@]}"; do
     mkdir -p "$UI/${pair##*:}"
@@ -113,6 +144,24 @@ python3 "$BUILDER_ROOT/scripts/write-release-receipt.py" --ui-root "$UI" ${MIRRO
 
 BIND=(python3 "$BUILDER_ROOT/scripts/bind-generated-runtime-contracts.py" --ui-root "$UI" --smart-root "$UI"
       ${MIRROR_ARGS[@]+"${MIRROR_ARGS[@]}"} --receipt "$WORK/receipt.json" --source-root "$SOURCE")
+ID="ui-${RELEASE:0:12}"
+LINKAGE_ARGS=()
+if [ -n "$LINKAGE" ]; then
+    step 'write the unit inventory and the change report'
+    INVENTORY="$UI/contracts/releases/$ID.inventory.json"
+    node "$LINKAGE" inventory --rev "$SOURCE_REVISION" --release "$ID" --out "$INVENTORY" \
+        || fail "no unit inventory for $ID: the build commit is left in $UI"
+    LINKAGE_ARGS=(--unit-inventory "$INVENTORY")
+    if [ -n "$PREVIOUS_INVENTORY" ]; then
+        CHANGES="$UI/contracts/releases/$ID.changes.json"
+        node "$LINKAGE" compare "$PREVIOUS_INVENTORY" "$INVENTORY" --out "$CHANGES" \
+            || fail "the change report $PREVIOUS_ID -> $ID has violations: the build commit is left in $UI"
+        python3 -c 'import json,sys;r=json.load(open(sys.argv[1]));print("changes %s -> %s: %d added, %d removed, %d changed, %d with changed dependencies"%(r["from"]["release"],r["to"]["release"],len(r["added"]),len(r["removed"]),len(r["changed"]),len(r["dependencies_changed"])))' "$CHANGES"
+        LINKAGE_ARGS+=(--change-report "$CHANGES")
+    else
+        printf 'no earlier release of ui HEAD carries an inventory: no change report\n'
+    fi
+fi
 
 step 'bind the owner manifests'
 "${BIND[@]}" --phase owners
@@ -122,9 +171,8 @@ if [ -n "$MIRROR" ] && [ -n "$(git -C "$MIRROR" status --porcelain)" ]; then
 fi
 
 step 'write the release lock'
-REFERENCE="$("${BIND[@]}" --phase reference | tail -1)"
+REFERENCE="$("${BIND[@]}" --phase reference ${LINKAGE_ARGS[@]+"${LINKAGE_ARGS[@]}"} | tail -1)"
 printf '%s\n' "$REFERENCE"
-ID="ui-${RELEASE:0:12}"
 PAIR="$(printf '%s' "$REFERENCE" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("pair") or "")')"
 
 step 'release gate'

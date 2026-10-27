@@ -21,7 +21,7 @@ Two layouts:
   ``pair``, and a v1 alias lock is written under that pair id, because v1
   readers (ui-admin's pin) resolve a release by the ui-smart commit.
 """
-import argparse,copy,hashlib,importlib.util,json,re,subprocess
+import argparse,copy,hashlib,importlib.util,json,re,subprocess,sys
 from pathlib import Path
 
 UI='simai/ui'
@@ -31,6 +31,24 @@ SMART_TREE='distr/smart'
 
 
 def sha(data):return hashlib.sha256(data).hexdigest()
+
+
+def unit_inventory_field(ui_root,compatibility,inventory,change_report):
+ """The lock's pointer to the release's simai.linkage inventory (and change report)."""
+ def pointer(path):
+  path=path.resolve()
+  return {'path':path.relative_to(ui_root.resolve()).as_posix(),'sha256':sha(path.read_bytes())}
+ data=json.loads(inventory.read_text())
+ if data.get('schema')!='simai.framework.unit-inventory' or data.get('release')!=compatibility:
+  raise ValueError(f'{inventory} is not the unit inventory of {compatibility}')
+ field={'schema':data['schema'],**pointer(inventory),'units':len(data['units']),'change_report':None}
+ if field['path']!=f'contracts/releases/{compatibility}.inventory.json':raise ValueError('the inventory must sit beside the lock')
+ if change_report:
+  report=json.loads(change_report.read_text())
+  if report.get('to',{}).get('release')!=compatibility or report.get('violations'):
+   raise ValueError(f'{change_report} is not a clean change report to {compatibility}')
+  field['change_report']={**pointer(change_report),'from':report['from']['release']}
+ return field
 def git(root,*args):return subprocess.check_output(['git','-C',str(root),*args])
 def text(root,*args):return git(root,*args).decode().strip()
 def write(path,value):path.parent.mkdir(parents=True,exist_ok=True);path.write_text(json.dumps(value,ensure_ascii=False,indent=2)+'\n')
@@ -271,6 +289,8 @@ def main():
  p.add_argument('--receipt',type=Path,required=True)
  p.add_argument('--source-root',type=Path,required=True)
  p.add_argument('--phase',choices=['owners','reference'],required=True)
+ p.add_argument('--unit-inventory',type=Path,help='v2 reference phase: the simai.linkage inventory written beside the lock (contracts/releases/ui-<12>.inventory.json)')
+ p.add_argument('--change-report',type=Path,help='with --unit-inventory: the change report against the previous released inventory')
  a=p.parse_args()
  receipt=json.loads(a.receipt.read_text());sources=receipt['runtime_sources']
  v2=a.smart_root.resolve()==a.ui_root.resolve()
@@ -377,6 +397,19 @@ def main():
   lock['mirror']={**lock_source(MIRROR,releases['mirror'],'smart'),'mirrors':'smart'};lock['pair']=pair
   written['pair']=pair
  lock.update(tail)
+ if a.unit_inventory:
+  # simai.linkage 1.0.0 (requirement 8): the lock points at the inventory
+  # beside it, by path and sha256, as a field added to the existing ones. A
+  # ui whose lock v2 validator does not know the field yet refuses it
+  # (release_lock_keys_invalid); then the lock is written as before and the
+  # inventory still sits beside it.
+  linkage=unit_inventory_field(a.ui_root,compatibility,a.unit_inventory,a.change_report)
+  try:
+   mod.validate_lock({**lock,'unit_inventory':linkage});lock['unit_inventory']=linkage;written['unit_inventory']=linkage['path']
+  except mod.ContractError as error:
+   if str(error)!='release_lock_keys_invalid':raise
+   written['unit_inventory']=None
+   print('unit_inventory: not in the lock -- this ui\'s lock v2 validator does not accept the field yet; the inventory is beside the lock',file=sys.stderr)
  mod.validate_lock(lock)
  write(a.ui_root/f'contracts/releases/{compatibility}.lock.json',lock)
  if 'pair' in lock:
