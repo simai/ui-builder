@@ -174,7 +174,8 @@ def sync_smart_entries(manifest,ui_root,smart_revision,release,source_root,sourc
  shipped component with no entry gets one, built from the bytes, the rule and
  the source smart.manifest.json, with the readiness a component outside the
  curated plan has: discoverable, not suggested, curated for nothing. Existing
- entries, and every curated decision in them, are left as they are; the
+ entries keep every curated decision; their assets, `declared` and `requires`
+ are facts of the bytes and the rule and are recounted; the
  owner promotes a new entry by hand. inventory.expected is recounted.
 
  A component whose folder and rule were renamed (sf-input: inputs/cl-inputs ->
@@ -202,6 +203,10 @@ def sync_smart_entries(manifest,ui_root,smart_revision,release,source_root,sourc
   return sorted(set(relation_id(item['name'],rule_kinds) for item in rule.get('relation',[])))
  kept=[{**entry,'runtime':{**entry['runtime'],'asset_paths':[UI+'@'+smart_revision+':'+path for path in assets_of(entry['runtime']['rule_name'][3:])]},
   'requires':requires_of(shipped[entry['runtime']['rule_name']])} for entry in kept]
+ # `declared` is a fact of the rule too (smart_rule_assets_mismatch): a kept
+ # entry whose component gained a sheet of its own (sf-page-header, 1.3.8)
+ # would otherwise go on declaring css false.
+ kept=[{**entry,'runtime':{**entry['runtime'],'declared':{'js':bool(shipped[entry['runtime']['rule_name']].get('js',False)),'css':bool(shipped[entry['runtime']['rule_name']].get('css',False))}}} for entry in kept]
  dropped=[entry for entry in manifest['entries'] if entry['runtime'].get('rule_name') not in shipped]
  removed=[entry['id'] for entry in dropped]
  claimed={entry['runtime'].get('rule_name') for entry in kept}
