@@ -584,6 +584,94 @@ function materializeDeterministicGzip(outputRoot)
     return written;
 }
 
+// Every sheet declares the cascade layer order before its first rule. The
+// order of cascade layers is the order a page first meets their names, so a
+// component sheet that came before core.css -- a page printing a first
+// paint's sheets in the listed order, where core/css/core.css stands after
+// the component/ sheets -- named sf.components first and put it under
+// sf.base: core's resets then beat the components (an <ol> took its margin,
+// an icon button lost its padding), and sf-pagination's page row measured 88
+// px instead of 73 (2026-10-28). The statement is the source's own
+// (core/scss/_sf_layer_order.scss); repeated, it changes nothing, so the
+// first sheet a page loads sets the order whatever it is.
+const LAYER_ORDER_SOURCE = "core/scss/_sf_layer_order.scss";
+const LAYER_ORDER_STATEMENT = /@layer\s+sf\.[a-z-]+(?:\s*,\s*sf\.[a-z-]+)+\s*;/u;
+const CHARSET = /^@charset\s+"[^"]*";\s*/u;
+
+function layerOrderStatement(sourceRoot)
+{
+    const source = path.join(sourceRoot, LAYER_ORDER_SOURCE);
+
+    if (!fs.existsSync(source))
+    {
+        return null;
+    }
+
+    const match = fs.readFileSync(source, "utf8").match(LAYER_ORDER_STATEMENT);
+
+    if (!match)
+    {
+        throw new Error(`${LAYER_ORDER_SOURCE} declares no sf layer order`);
+    }
+
+    return normalizeLayerStatement(match[0]);
+}
+
+function normalizeLayerStatement(text)
+{
+    return text.replace(/\s+/gu, " ").replace(/\s*,\s*/gu, ", ").replace(/\s*;$/u, ";");
+}
+
+function materializeLayerOrder(plan)
+{
+    if (!fs.existsSync(plan.outputRoot))
+    {
+        return [];
+    }
+
+    const statement = layerOrderStatement(plan.sourceRoot);
+
+    if (!statement)
+    {
+        return [];
+    }
+
+    const canonicalRoot = assertRegularTree(plan.outputRoot, "outputRoot");
+    const written = [];
+
+    for (const file of walkRegularFiles(canonicalRoot, "generated output tree"))
+    {
+        if (path.extname(file).toLowerCase() !== ".css")
+        {
+            continue;
+        }
+
+        const original = fs.readFileSync(file, "utf8");
+        const first = original.search(/@layer\s+sf\./u);
+
+        if (first < 0)
+        {
+            continue;
+        }
+
+        // A sheet that already opens with the order (core.css, minified or
+        // not) keeps its bytes.
+        const opening = original.slice(first).match(/^@layer[^;{]*[;{]/u)[0];
+
+        if (normalizeLayerStatement(opening) === statement)
+        {
+            continue;
+        }
+
+        const charset = original.match(CHARSET);
+        const head = charset ? charset[0] : "";
+        fs.writeFileSync(file, `${head}${statement}\n${original.slice(head.length)}`);
+        written.push(file);
+    }
+
+    return written;
+}
+
 function normalizeGeneratedTextWhitespace(outputRoot)
 {
     if (!fs.existsSync(outputRoot))
@@ -660,6 +748,7 @@ function materializeGeneratedPackaging(plan)
             compatibilityScripts: [],
             aggregateAssets: [],
             gzip: [],
+            layerOrder: [],
             legacyRuntimeCompatibility: [],
             normalizedText: [],
             ruleManifests: [],
@@ -674,6 +763,8 @@ function materializeGeneratedPackaging(plan)
         ...materializeEmptyCompatibilityScripts(plan),
         ...materializeUtilityAggregateCompatibility(plan),
     ];
+    // Before the legacy compatibility copies, whose bytes are bound by digest.
+    const layerOrder = materializeLayerOrder(plan);
     const ruleManifests = materializeRuleManifest(plan);
     const legacyRuntimeCompatibility = materializeLegacyRuntimeCompatibility(plan);
     const normalizedText = normalizeGeneratedTextWhitespace(plan.outputRoot);
@@ -683,6 +774,7 @@ function materializeGeneratedPackaging(plan)
         aggregateAssets,
         compatibilityScripts,
         gzip,
+        layerOrder,
         legacyRuntimeCompatibility,
         normalizedText,
         ruleManifests,
@@ -696,6 +788,7 @@ module.exports = {
     materializeDeterministicGzip,
     materializeEmptyCompatibilityScripts,
     materializeGeneratedPackaging,
+    materializeLayerOrder,
     normalizeGeneratedTextWhitespace,
     materializeSourceAssets,
 };

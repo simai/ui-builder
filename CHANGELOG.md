@@ -100,6 +100,18 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Fixed
 
+- Every built sheet declares the `sf.*` cascade layer order before its first
+  rule. Layer order is the order a page first meets the names, and only
+  `core.css` declared it: a page that loaded a component sheet first (a first
+  paint's `static/sheets.json` printed in its listed order, where
+  `core/css/core.css` stands after the `component/` sheets) put
+  `sf.components` under `sf.base`, so core's resets beat the components --
+  sf-pagination's page row measured 88 px instead of 73 at size 1 and 80
+  instead of 65 at 1/2. The statement is read from the source
+  (`core/scss/_sf_layer_order.scss`); a sheet that already opens with it is
+  left as built (`docs/developer/architecture.md`; tests in
+  `tests/reproducibility/generated-packaging.test.js`).
+
 - `sf-icons build` no longer emits a variable font whose axes do nothing
   (#1). A large instanced Material Symbols subset lost its `gvar` table while
   `fvar` still declared the axes, and the ligature check passed. The emitted

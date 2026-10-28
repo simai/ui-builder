@@ -43,6 +43,13 @@ reproducible build followed by independent acceptance.
 - Source checkouts and existing generated repositories are not modified by
   verification.
 - Partial or mismatched legacy compatibility bindings fail closed.
+- Every built sheet that uses the `sf.*` cascade layers opens with their
+  order, the statement of the source's `core/scss/_sf_layer_order.scss`
+  (after `@charset`). A page meets layer names in the order it loads sheets,
+  so a component sheet loaded before `core.css` used to put `sf.components`
+  under `sf.base`; with the statement in every sheet, the first sheet sets
+  the right order. A sheet that already opens with it (`core.css`) is left as
+  built; a source without the file leaves every sheet as built.
 - Output collisions and unsupported filesystem entries fail closed.
 - One successful build is not evidence of complete framework RTL readiness.
 
