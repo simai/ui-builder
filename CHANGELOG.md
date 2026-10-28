@@ -6,6 +6,38 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Added
 
+- The element layer joins the shared Smart runtime (2026-10-28, stand 25):
+  `libs/sharedRuntime.js` `CORE_MODULES` adds `element-manifest`, `aliases`,
+  `alias-table`, `host-port`, `deprecations`, `page-actions`, `layer-stack`,
+  `open-surface-mark` and `instance-path`, so a Smart or package bundle asks
+  the page's runtime for them instead of carrying a copy (26 KB minified per
+  bundle; the 66 Smart bundles of pair ui-1349891b9c72 go from 1075 to 580 KB
+  gzip). An id is made external only when the source's own
+  `core/js/runtime.js` hands it out, so a package built over an older pinned
+  release keeps its copy rather than ask that release for a module it lacks.
+- Runtime ABI: a source with `core/contracts/shared-runtime.v1.json` builds
+  bundles that ask `SF.runtimeModule(id, abi)`; the page's runtime refuses
+  another ABI, loudly, and the refusal reaches a bundle that waited for the
+  runtime script.
+- A Smart or package bundle embeds only the keys of its `component.json` the
+  runtime reads (`libs/componentManifestEmbed.js`): the source's
+  `core/contracts/shared-runtime.v1.json` `component_manifest_keys` (`id`,
+  `tag`, `version`, `kind`, `settings`, `values`, `events`, `actions`,
+  `form`, `presentation`, `host-states`, `port`, `layer`, `implements`,
+  `traits`, `words`, `css-variables`). x-registry, x-rule, x-decisions,
+  relations, aliases and examples stay in the source. A source without the
+  list embeds the whole file, as before.
+- The smart and package builds write `<diagnostics>.runtime.json`
+  (`simai.framework.shared-runtime-usage` v1: the ABI and, per runtime
+  module, the names the bundles import); `verify-package-reproducibility`
+  carries it into the report as `runtime`, and the package receipt records it
+  as `framework.runtime` and, with `--ui`, checks it against the release's
+  shared-runtime contract (`framework.runtime_check`): another ABI, a missing
+  module or name, or no reported usage against a release with the contract
+  refuse the receipt.
+- `SF_BUILD_MODULE_STATS=1` makes the core, smart and package builds write
+  `<diagnostics>.modules.json`: which modules each bundle carries (diagnostic
+  only).
 - Usage records and reconcile (standard `simai.linkage` 1.0.0, requirements
   11-16): `schemas/simai.framework.unit-usage.v1.schema.json` (a consumer's
   sources, releases and places with unit id, version and content hash),

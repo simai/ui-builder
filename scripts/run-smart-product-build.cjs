@@ -7,7 +7,8 @@ const { createRequire } = require("node:module");
 const {
     configureProductConfigurations,
 } = require("../libs/productWebpackRuntime");
-const { applySharedRuntimeExternals } = require("../libs/sharedRuntime");
+const { applySharedRuntimeExternals, runtimeUsageReport } = require("../libs/sharedRuntime");
+const { applyComponentManifestEmbed } = require("../libs/componentManifestEmbed");
 const { compatibilityFromEnvironment } = require("../libs/legacyRuntimeCompatibility");
 
 const ARGUMENT_NAMES = Object.freeze([
@@ -113,6 +114,10 @@ if (usage)
     ));
     const webpackImplementation = builderRequire("webpack");
 
+    // The shared runtime modules and names the bundles ask for: written beside
+    // the diagnostics (<diagnostics>.runtime.json) for the package receipt.
+    const runtimeUsage = {};
+
     function webpack(configurations)
     {
         configureProductConfigurations(configurations, {
@@ -123,7 +128,9 @@ if (usage)
         });
         // Smart elements take lit and smart-base from the shared runtime Core
         // loads once per page, instead of a copy each.
-        applySharedRuntimeExternals(configurations, { sourceRoot });
+        applySharedRuntimeExternals(configurations, { sourceRoot, usage: runtimeUsage });
+        // Each element embeds only the keys of its component.json the runtime reads.
+        applyComponentManifestEmbed(configurations, { sourceRoot });
         const compiler = webpackImplementation(configurations);
         const run = compiler.run;
 
@@ -139,6 +146,18 @@ if (usage)
                         warnings: true,
                         warningsCount: true,
                     });
+                    if (process.env.SF_BUILD_MODULE_STATS)
+                    {
+                        // Diagnostic only: which modules each bundle carries.
+                        fs.writeFileSync(`${diagnosticsPath}.modules.json`, JSON.stringify(stats.toJson({
+                            all: false, children: true, chunks: true, chunkModules: true, nestedModules: true,
+                            ids: true, entrypoints: true, assets: true, chunkRelations: false,
+                        })));
+                    }
+                    fs.writeFileSync(
+                        `${diagnosticsPath}.runtime.json`,
+                        `${JSON.stringify(runtimeUsageReport(runtimeUsage, sourceRoot), null, 2)}\n`,
+                    );
                     fs.writeFileSync(
                         `${diagnosticsPath}.stats.json`,
                         `${JSON.stringify(details, null, 2)}\n`,

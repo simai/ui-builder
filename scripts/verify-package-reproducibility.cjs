@@ -179,9 +179,14 @@ function runWave(waveName, context)
     }
 
     const files = filesUnder(outputRoot);
+    // The shared runtime modules and names the package's bundles ask for
+    // (run-package-product-build.cjs); the receipt records them.
+    const runtimePath = `${diagnosticsPath}.runtime.json`;
+    const runtime = fs.existsSync(runtimePath) ? JSON.parse(fs.readFileSync(runtimePath, "utf8")) : null;
 
     return {
         ...overlay,
+        runtime,
         files,
         files_count: files.length,
         manifest_sha256: sha256(`${JSON.stringify(files)}\n`),
@@ -319,6 +324,7 @@ function main()
         report.package_source.revision = first.package_revision;
         report.source_revision = first.source_revision;
         report.components = first.components;
+        report.runtime = first.runtime;
         report.output = path.join("wave-1", "output", "package", context.packageName).split(path.sep).join("/");
         report.products = {
             package: {

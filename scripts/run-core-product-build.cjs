@@ -135,6 +135,14 @@ if (usage)
                         warnings: true,
                         warningsCount: true,
                     });
+                    if (process.env.SF_BUILD_MODULE_STATS)
+                    {
+                        // Diagnostic only: which modules each bundle carries.
+                        fs.writeFileSync(`${diagnosticsPath}.modules.json`, JSON.stringify(stats.toJson({
+                            all: false, children: true, chunks: true, chunkModules: true, nestedModules: true,
+                            ids: true, entrypoints: true, assets: true, chunkRelations: false,
+                        })));
+                    }
                     fs.writeFileSync(
                         `${diagnosticsPath}.stats.json`,
                         `${JSON.stringify(details, null, 2)}\n`,

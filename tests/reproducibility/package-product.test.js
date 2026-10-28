@@ -221,10 +221,11 @@ const REGISTRY_BUILDER = [
 ].join("\n");
 
 /** A ui checkout with one free release built from `sourceRevision`. */
-function freeRelease(sourceRevision, reference)
+function freeRelease(sourceRevision, reference, runtimeContract = null)
 {
     const ui = repository({
         "scripts/build-framework-registry.py": REGISTRY_BUILDER,
+        ...(runtimeContract ? { "distr/core/contracts/shared-runtime.v1.json": `${JSON.stringify(runtimeContract)}\n` } : {}),
         "distr/rule/rule.json": `${JSON.stringify([
             { name: "icons", type: "component", tags: ["sf-icon"] },
             { name: "cl-buttons", type: "smart", tags: ["sf-button"] },
@@ -245,7 +246,7 @@ function freeRelease(sourceRevision, reference)
 }
 
 /** A workspace as verify-package-reproducibility.cjs leaves it. */
-function packageWorkspace(sourceRevision, rules, manifest = { name: "@example/acme-ui", private: true, license: "Apache-2.0" })
+function packageWorkspace(sourceRevision, rules, manifest = { name: "@example/acme-ui", private: true, license: "Apache-2.0" }, runtime = undefined)
 {
     const product = repository({
         "resources/ui/framework.lock.json": lock(sourceRevision),
@@ -270,6 +271,7 @@ function packageWorkspace(sourceRevision, rules, manifest = { name: "@example/ac
         package_source: { path: "resources/ui", repository: "example/product-ui", revision: git(product, "rev-parse", "HEAD"), root: product },
         product: "package",
         products: { package: { byte_identical: true, files_count: files.length, manifest_sha256: sha256(`${JSON.stringify(files)}\n`) } },
+        ...(runtime === undefined ? {} : { runtime }),
         schema_version: 1,
         source_revision: sourceRevision,
         status: "PASS",
@@ -315,7 +317,12 @@ test("the receipt names the package, its source, the free release, the builder a
     assert.deepEqual(value.licence, { ref: "Apache-2.0" });
     assert.deepEqual(Object.keys(value).slice(0, 6), ["schema_id", "schema_version", "package", "loader", "package_source", "licence"]);
     assert.equal("tier" in value.licence, false);
-    assert.deepEqual(value.framework, { source: { repository: "simai/ui-source", revision: source }, release: id });
+    assert.deepEqual(value.framework, {
+        source: { repository: "simai/ui-source", revision: source },
+        release: id,
+        runtime: null,
+        runtime_check: { contract: null, status: "not-published" },
+    });
     assert.deepEqual(value.builder, { repository: "simai/ui-builder", revision: "b".repeat(40), clean: true });
     assert.deepEqual(value.required_files.map(item => item.path), [
         "smart/rule.js", "smart/gauge/js/gauge.js", "smart/widget/js/widget.js", "smart/widget/css/widget.css",
@@ -409,4 +416,44 @@ test("the receipt records the package's declared licence and refuses a package t
         assert.equal(bad.result.status, 1, `license ${JSON.stringify(license)} was accepted`);
         assert.match(bad.result.stderr, /is not an SPDX id, a LicenseRef-\.\.\. or an SPDX expression/u);
     }
+});
+
+test("the receipt records what the package asks the shared runtime for, and checks it against the release's runtime", () => {
+    // A package carries no element layer of its own: its bundles ask the
+    // page's runtime, which is the release's (2026-10-28).
+    const source = "f".repeat(40);
+    const contract = {
+        schema: "simai.framework.shared-runtime",
+        version: 1,
+        abi: 1,
+        core_hosted: ["aliases"],
+        modules: {
+            lit: { source: "lit", exports: null },
+            aliases: { source: "core/js/aliases.js", exports: ["installAliases"] },
+            "element-manifest": { source: "core/js/element-manifest.js", exports: ["elementFromManifest"] },
+        },
+    };
+    const usage = { schema: "simai.framework.shared-runtime-usage", version: 1, abi: 1, modules: { "element-manifest": ["elementFromManifest"], lit: ["html"] } };
+    const { ui } = freeRelease(source, REFERENCE, contract);
+    const agreed = receipt(packageWorkspace(source, RULES, undefined, usage).workspace, ui);
+    assert.equal(agreed.result.status, 0, agreed.result.stderr);
+    assert.deepEqual(agreed.value.framework.runtime, { abi: 1, modules: usage.modules });
+    assert.deepEqual(agreed.value.framework.runtime_check, { contract: "distr/core/contracts/shared-runtime.v1.json", status: "agrees" });
+
+    const otherAbi = receipt(packageWorkspace(source, RULES, undefined, { ...usage, abi: 2 }).workspace, ui);
+    assert.equal(otherAbi.result.status, 1);
+    assert.match(otherAbi.result.stderr, /built for runtime ABI 2, ui-[0-9a-f]{12} runs ABI 1/u);
+
+    const unknownName = receipt(packageWorkspace(source, RULES, undefined, { ...usage, modules: { "element-manifest": ["elementFromManifest", "gone"] } }).workspace, ui);
+    assert.match(unknownName.result.stderr, /element-manifest: imports gone, which ui-[0-9a-f]{12} does not export/u);
+
+    const unknownModule = receipt(packageWorkspace(source, RULES, undefined, { ...usage, modules: { "host-port": ["portOf"] } }).workspace, ui);
+    assert.match(unknownModule.result.stderr, /asks for the shared module host-port, which ui-[0-9a-f]{12} does not hand out/u);
+
+    const unreported = receipt(packageWorkspace(source, RULES).workspace, ui);
+    assert.match(unreported.result.stderr, /reported no shared runtime usage/u);
+
+    const older = freeRelease(source, REFERENCE);
+    const beforeContract = receipt(packageWorkspace(source, RULES, undefined, usage).workspace, older.ui);
+    assert.match(beforeContract.result.stderr, /built for runtime ABI 1; ui-[0-9a-f]{12} publishes no distr\/core\/contracts\/shared-runtime\.v1\.json/u);
 });

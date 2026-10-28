@@ -213,6 +213,47 @@ def check_against_release(ui_root, release_lock, name, rules, folders, output_ro
     return {**result, 'status': 'agrees'}
 
 
+RUNTIME_CONTRACT = 'distr/core/contracts/shared-runtime.v1.json'
+
+
+def check_runtime_against_release(ui_root, release_lock, runtime):
+    """The shared runtime modules the package asks for, against the release's.
+
+    A package carries no element layer of its own: its bundles ask the page's
+    runtime (SF.runtimeModule) for lit, smart-base, element-manifest and the
+    rest, with the runtime ABI of the ui-source they were built over. The page
+    runs the release's runtime, so the release must have the same ABI, every
+    module the package asks for and every name it imports from one.
+    """
+    framework = release_lock['compatibility_id']
+    release = release_lock['runtime_sources']['core']['revision']
+    used = (runtime or {}).get('modules') or {}
+    if not exists(ui_root, release, RUNTIME_CONTRACT):
+        if (runtime or {}).get('abi') is not None:
+            raise ReceiptError(f'the package was built for runtime ABI {runtime["abi"]}; {framework} publishes no {RUNTIME_CONTRACT}')
+        return {'contract': None, 'status': 'not-published'}
+    contract = json.loads(git(ui_root, 'show', f'{release}:{RUNTIME_CONTRACT}'))
+    problems = []
+    if runtime is None:
+        problems.append('the build reported no shared runtime usage (a builder from before 2026-10-28)')
+    elif runtime.get('abi') != contract['abi']:
+        problems.append(f'built for runtime ABI {runtime.get("abi")}, {framework} runs ABI {contract["abi"]}')
+    for module_id, names in sorted(used.items()):
+        offered = contract['modules'].get(module_id)
+        if offered is None:
+            problems.append(f'asks for the shared module {module_id}, which {framework} does not hand out')
+            continue
+        exports = offered.get('exports')
+        if exports is None:
+            continue
+        missing = [name for name in names if name != '*' and name not in exports]
+        if missing:
+            problems.append(f'{module_id}: imports {", ".join(missing)}, which {framework} does not export')
+    if problems:
+        raise ReceiptError(f'the package and the runtime of {framework} disagree:\n  ' + '\n  '.join(problems))
+    return {'contract': RUNTIME_CONTRACT, 'status': 'agrees'}
+
+
 def is_licence_expression(value):
     tokens = value.replace('(', ' ( ').replace(')', ' ) ').split()
     if not tokens or any(not LICENCE_TOKEN.fullmatch(token) for token in tokens):
@@ -302,6 +343,10 @@ def build_receipt(args):
 
     treeish = f'{source["revision"]}:{source["path"]}' if source['path'] else source['revision'] + '^{tree}'
     framework = {'source': {'repository': 'simai/ui-source', 'revision': report['source_revision']}, 'release': None}
+    # What the package's bundles ask the page's shared runtime for: its ABI, and
+    # the modules and names (docs/developer/product-packages.md).
+    runtime = report.get('runtime')
+    framework['runtime'] = None if runtime is None else {'abi': runtime.get('abi'), 'modules': runtime.get('modules') or {}}
     reference = {'path': f'distr/core/contracts/packages/{name}.package.json', 'release': None, 'status': 'not-checked'}
     if args.ui:
         release_lock, candidates = resolve_release(args.ui, report['source_revision'])
@@ -313,6 +358,7 @@ def build_receipt(args):
             if len(candidates) > 1:
                 framework['release_candidates'] = candidates
             reference = check_against_release(args.ui, release_lock, name, rules, folders, output_root)
+            framework['runtime_check'] = check_runtime_against_release(args.ui, release_lock, report.get('runtime'))
 
     by_path = {item['path']: item for item in files}
     receipt = {

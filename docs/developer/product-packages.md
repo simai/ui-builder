@@ -73,6 +73,25 @@ is still accepted, so the four components can move without touching their lock.
   `../field-renderers/index.js`), exactly as ui-source's own components do.
 - A package file may not replace a ui-source file: a package adds to the
   Framework, it does not shadow it.
+- **A package carries no element layer of its own.** lit, the Smart base and
+  the element layer (`element-manifest`, `aliases`, `alias-table`,
+  `host-port`, `deprecations`, `page-actions`, `layer-stack`,
+  `open-surface-mark`, `instance-path`, `page-language`, `position`,
+  `control-spacing`) come from the page's shared runtime: an import of one of
+  them becomes `SF.runtimeModule(id, abi)` (`libs/sharedRuntime.js`), only
+  for the ids the pinned ui-source's own runtime hands out
+  (`core/js/runtime.js`), with the runtime ABI of its
+  `core/contracts/shared-runtime.v1.json`. The page runs the release's
+  runtime; a runtime of another ABI refuses the bundle loudly. ui-source
+  `docs/developer/shared-runtime.md` describes the runtime.
+- A bundle embeds only the keys of its `component.json` the runtime reads
+  (the contract's `component_manifest_keys`, `libs/componentManifestEmbed.js`);
+  a package component's code that reads another key off its manifest must
+  get it added there in ui-source.
+- A component that needs another Smart element on the page asks for it by
+  tag; it does not import that element's `index.js` (the Loader defines it
+  from its own bundle). An import puts a second copy of the element, and of
+  its sheet, in the importer's bundle.
 
 ## The overlay
 
@@ -161,7 +180,9 @@ of the output (`ustar`, entries sorted, owner `0:0`, mtime `0`, modes
   "loader": {"declaration": "SF_BOOT_CONFIG.packages.larena.base", "base": "<mount>/smart", "rule_file": "smart/rule.js"},
   "package_source": {"repository": "simai/larena-ui", "revision": "<commit>", "path": "resources/ui", "tree": "<git tree of the path>"},
   "licence": {"ref": "Apache-2.0"},
-  "framework": {"source": {"repository": "simai/ui-source", "revision": "<pinned>"}, "release": "ui-<12>"},
+  "framework": {"source": {"repository": "simai/ui-source", "revision": "<pinned>"}, "release": "ui-<12>",
+                "runtime": {"abi": 1, "modules": {"element-manifest": ["elementFromManifest"], "lit": ["html", "nothing"]}},
+                "runtime_check": {"contract": "distr/core/contracts/shared-runtime.v1.json", "status": "agrees | not-published"}},
   "builder": {"repository": "simai/ui-builder", "revision": "<commit>", "clean": true},
   "node": "v20.19.5",
   "output": {"runtime_path": "smart", "files_count": 0, "manifest_sha256": "...", "archive": "package-larena.tar", "archive_sha256": "...", "archive_format": "..."},
@@ -177,6 +198,17 @@ of the output (`ustar`, entries sorted, owner `0:0`, mtime `0`, modes
   revision, resolved from `ui/contracts/releases/ui-<12>.lock.json`
   (`build_inputs.source.commit`); `null` when there is none yet, or when no
   `--ui` is given. The package must be served beside that release.
+- `framework.runtime` is what the package's bundles ask the page's shared
+  runtime for: the runtime ABI of the pinned ui-source (`null` before it had
+  one) and, per module id, the names imported from it (`*` for a namespace).
+  The build writes it (`<diagnostics>.runtime.json`) and the reproducibility
+  report carries it; `null` when the builder predates it (2026-10-28). With
+  `--ui`, `framework.runtime_check` compares it with the release's
+  `distr/core/contracts/shared-runtime.v1.json`: another ABI, a module the
+  release does not hand out, a name it does not export, or no reported usage
+  against a release that publishes the contract refuse the receipt.
+  `not-published`: the release is older than the contract and the package
+  asked without an ABI. Additive fields; `schema_version` stays `1`.
 - `licence.ref` is the `license` field of the package folder's
   `package.json` at `package_source.revision`, as written there: an SPDX
   license id (`Apache-2.0`), a `LicenseRef-...`, or an SPDX expression
