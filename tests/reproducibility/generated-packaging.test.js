@@ -496,3 +496,50 @@ test("a host port's conformance kit ships whole and its digest recomputes withou
         fs.rmSync(subject.workspace, { force: true, recursive: true });
     }
 });
+test("every sheet that uses the sf layers declares their order before its first rule", () => {
+    const subject = fixture();
+    const order = "@layer sf.reset, sf.tokens, sf.base, sf.utilities, sf.components, sf.overrides, sf.states;";
+    writeFile(subject.sourceRoot, "core/scss/_sf_layer_order.scss", `// keep first\n${order}\n`);
+    const component = writeFile(subject.outputRoot, "utility/space/default/css/layered.css",
+        "@charset \"UTF-8\";\n@layer sf.components{.a{margin:0}}\n");
+    const minified = writeFile(subject.outputRoot, "utility/space/default/css/core.min.css",
+        "@layer sf.reset,sf.tokens,sf.base,sf.utilities,sf.components,sf.overrides,sf.states;@layer sf.base{ol{margin:1rem}}");
+    const plain = writeFile(subject.outputRoot, "utility/space/default/css/plain.css", ".b{color:red}\n");
+
+    try
+    {
+        const result = materializeGeneratedPackaging(subject.plan);
+
+        assert.equal(fs.readFileSync(component, "utf8"),
+            `@charset "UTF-8";\n${order}\n@layer sf.components{.a{margin:0}}\n`);
+        assert.equal(fs.readFileSync(minified, "utf8").startsWith("@layer sf.reset,sf.tokens,"), true);
+        assert.equal(fs.readFileSync(plain, "utf8"), ".b{color:red}\n");
+        assert.deepEqual(result.layerOrder, [fs.realpathSync(component)]);
+        assert.deepEqual(zlib.gunzipSync(fs.readFileSync(`${component}.gz`)), fs.readFileSync(component));
+
+        // A second pass changes nothing: the order is declared once.
+        materializeGeneratedPackaging(subject.plan);
+        assert.equal(fs.readFileSync(component, "utf8").split(order).length, 2);
+    }
+    finally
+    {
+        fs.rmSync(subject.workspace, { force: true, recursive: true });
+    }
+});
+
+test("a source without the sf layer order leaves every sheet as built", () => {
+    const subject = fixture();
+    const sheet = writeFile(subject.outputRoot, "utility/space/default/css/layered.css", "@layer sf.components{.a{margin:0}}\n");
+
+    try
+    {
+        const result = materializeGeneratedPackaging(subject.plan);
+
+        assert.equal(fs.readFileSync(sheet, "utf8"), "@layer sf.components{.a{margin:0}}\n");
+        assert.deepEqual(result.layerOrder, []);
+    }
+    finally
+    {
+        fs.rmSync(subject.workspace, { force: true, recursive: true });
+    }
+});
