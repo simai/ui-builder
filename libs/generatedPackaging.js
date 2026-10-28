@@ -112,6 +112,96 @@ function safeDestination(outputRoot, relativePath, label)
     return destination;
 }
 
+// A host port's conformance kit ships whole. Its digest (port.json
+// conformance.sha256) is over every file of the kit directory: for each file,
+// sorted, the line "<path relative to the kit> <sha256 of the bytes>\n", then
+// the sha256 of that listing (ui-source tests/host-port-kits.contract.test.mjs).
+// The extension rule copied the cases and the manifest but not kit/README.md,
+// so no consumer could recompute a shipped digest (2026-10-28). Every file of
+// a kit is copied whatever its extension, the source kit must match its pin,
+// and the shipped kit, read without the .gz files the build adds beside them,
+// must give the same digest.
+const PORTS_ROOT = "core/contracts/ports";
+
+function portKitDigest(kitRoot, { skipGzip = false } = {})
+{
+    const lines = [];
+
+    for (const file of walkRegularFiles(kitRoot, "port kit"))
+    {
+        if (skipGzip && file.endsWith(".gz"))
+        {
+            continue;
+        }
+
+        const relative = path.relative(kitRoot, file).split(path.sep).join("/");
+        lines.push(`${relative} ${crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex")}\n`);
+    }
+
+    lines.sort(compareCodeUnits);
+
+    return crypto.createHash("sha256").update(lines.join("")).digest("hex");
+}
+
+function portKits(root)
+{
+    const portsRoot = path.join(root, PORTS_ROOT);
+    const kits = [];
+
+    if (!fs.existsSync(portsRoot) || !fs.lstatSync(portsRoot).isDirectory())
+    {
+        return kits;
+    }
+
+    for (const port of sortedEntries(portsRoot).filter((entry) => entry.isDirectory()))
+    {
+        for (const edition of sortedEntries(path.join(portsRoot, port.name)).filter((entry) => entry.isDirectory()))
+        {
+            const editionRoot = path.join(portsRoot, port.name, edition.name);
+            const portPath = path.join(editionRoot, "port.json");
+
+            if (!fs.existsSync(portPath))
+            {
+                continue;
+            }
+
+            const conformance = JSON.parse(fs.readFileSync(portPath, "utf8")).conformance;
+
+            if (!conformance || !conformance.kit)
+            {
+                continue;
+            }
+
+            const kitRoot = path.resolve(editionRoot, conformance.kit);
+
+            if (!isWithin(editionRoot, kitRoot) || kitRoot === editionRoot
+                || !fs.existsSync(kitRoot) || !fs.lstatSync(kitRoot).isDirectory())
+            {
+                throw new Error(`port kit missing or unsafe: ${path.relative(root, editionRoot)}`);
+            }
+
+            kits.push({
+                kitRoot,
+                label: path.relative(root, editionRoot).split(path.sep).join("/"),
+                sha256: conformance.sha256,
+            });
+        }
+    }
+
+    return kits;
+}
+
+function assertShippedPortKits(outputRoot)
+{
+    for (const kit of portKits(outputRoot))
+    {
+        if (portKitDigest(kit.kitRoot, { skipGzip: true }) !== kit.sha256)
+        {
+            throw new Error(`shipped port kit does not give its pinned digest: ${kit.label}`);
+        }
+    }
+}
+
 const IMPORT_SPECIFIER = /(?:^|[;\s])(?:import|export)\s+(?:[^'";]*?\sfrom\s+)?["'](\.{1,2}\/[^"']+)["']|import\(\s*["'](\.{1,2}\/[^"']+)["']\s*\)/gu;
 
 function materializeSourceAssets(plan)
@@ -189,6 +279,18 @@ function materializeSourceAssets(plan)
         }
     }
 
+    const kitRoots = [];
+
+    for (const kit of portKits(sourceRoot))
+    {
+        if (portKitDigest(kit.kitRoot) !== kit.sha256)
+        {
+            throw new Error(`port kit does not give its pinned digest: ${kit.label}`);
+        }
+
+        kitRoots.push(fs.realpathSync(kit.kitRoot));
+    }
+
     for (const entry of plan.entries)
     {
         const entryDirectory = path.dirname(entry.input);
@@ -207,6 +309,7 @@ function materializeSourceAssets(plan)
             const portableRelativePath = relativePath.split(path.sep).join("/");
 
             if (!SOURCE_ASSET_EXTENSIONS.has(extension) && !normativeAssets.has(canonicalSource)
+                && !kitRoots.some((kitRoot) => isWithin(kitRoot, canonicalSource))
                 && !(extension === ".mjs"
                     && /^core\/js\/(?:composition|assembly)\/[A-Za-z0-9._-]+\.mjs$/u.test(portableRelativePath)))
             {
@@ -678,6 +781,7 @@ function materializeGeneratedPackaging(plan)
     const legacyRuntimeCompatibility = materializeLegacyRuntimeCompatibility(plan);
     const normalizedText = normalizeGeneratedTextWhitespace(plan.outputRoot);
     const gzip = materializeDeterministicGzip(plan.outputRoot);
+    assertShippedPortKits(plan.outputRoot);
 
     return {
         aggregateAssets,
@@ -692,10 +796,12 @@ function materializeGeneratedPackaging(plan)
 
 module.exports = {
     assertShippedModuleImports,
+    assertShippedPortKits,
     deterministicGzip,
     materializeDeterministicGzip,
     materializeEmptyCompatibilityScripts,
     materializeGeneratedPackaging,
     normalizeGeneratedTextWhitespace,
     materializeSourceAssets,
+    portKitDigest,
 };

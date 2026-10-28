@@ -43,6 +43,16 @@ reproducible build followed by independent acceptance.
 - Source checkouts and existing generated repositories are not modified by
   verification.
 - Partial or mismatched legacy compatibility bindings fail closed.
+- A host port's conformance kit (`core/contracts/ports/<port>/<version>/`
+  `<conformance.kit>/`, usually `kit/`) ships whole: every file of the kit
+  directory, whatever its extension, `README.md` included. The kit digest
+  (`conformance.sha256` in the edition's `port.json`) is the sha256 of the
+  listing of the kit's files, one line `<path relative to the kit> <sha256 of
+  the bytes>\n` per file, sorted. The distribution adds a `.gz` beside every
+  `.json` of the kit; a consumer recomputing the digest from the distribution
+  skips the `.gz` files. The build fails when a source kit does not give its
+  pinned digest, or when the shipped kit, read without its `.gz` files, does
+  not.
 - Output collisions and unsupported filesystem entries fail closed.
 - One successful build is not evidence of complete framework RTL readiness.
 

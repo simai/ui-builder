@@ -100,6 +100,16 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Fixed
 
+- Every host port's conformance kit ships whole. The source asset rule copied
+  the kit's cases and manifest (`.json`) but not `kit/README.md`, so no
+  consumer could recompute a shipped kit digest (`conformance.sha256`, the
+  sha256 over the sorted `<path> <sha256>` lines of every kit file). Every file
+  of a kit directory now ships whatever its extension; the build fails when a
+  source kit does not give its pinned digest or the shipped kit, read without
+  the `.gz` files the build adds, does not
+  (`docs/developer/architecture.md`; test in
+  `tests/reproducibility/generated-packaging.test.js`).
+
 - `sf-icons build` no longer emits a variable font whose axes do nothing
   (#1). A large instanced Material Symbols subset lost its `gvar` table while
   `fvar` still declared the axes, and the ligature check passed. The emitted

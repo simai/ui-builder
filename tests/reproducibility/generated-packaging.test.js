@@ -9,7 +9,9 @@ const zlib = require("node:zlib");
 const crypto = require("node:crypto");
 
 const {
+    assertShippedPortKits,
     materializeGeneratedPackaging,
+    portKitDigest,
 } = require("../../libs/generatedPackaging");
 
 function writeFile(root, relativePath, content)
@@ -443,4 +445,54 @@ test("what a shipped module imports by a relative path ships with it", () => {
     assert.ok(fs.existsSync(path.join(outputRoot, "core/js/composition/overlay.mjs")), "the module itself ships");
     assert.ok(fs.existsSync(path.join(outputRoot, "core/js/page-language.js")), "the imported script ships");
     assert.ok(copied.some((file) => file.endsWith("page-language.js")));
+});
+
+test("a host port's conformance kit ships whole and its digest recomputes without the .gz files", () => {
+    const subject = fixture();
+    const edition = "core/contracts/ports/simai.example-port/1.0.0/";
+    const input = writeFile(subject.sourceRoot, "core/index.js", "export {};\n");
+    const files = {
+        "README.md": "# Conformance kit\n",
+        "manifest.json": "{\"version\":\"1.0.0\",\"cases\":[\"one\"]}\n",
+        "cases/one.json": "{\"id\":\"one\"}\n",
+    };
+    const sha256 = (bytes) => crypto.createHash("sha256").update(bytes).digest("hex");
+    const digest = sha256(Object.entries(files)
+        .map(([relative, content]) => `${relative} ${sha256(content)}\n`)
+        .sort()
+        .join(""));
+
+    for (const [relative, content] of Object.entries(files))
+    {
+        writeFile(subject.sourceRoot, `${edition}kit/${relative}`, content);
+    }
+
+    writeFile(subject.sourceRoot, `${edition}port.json`, JSON.stringify({
+        version: "1.0.0",
+        conformance: { kit: "kit", sha256: digest, cases: 1 },
+    }));
+    subject.plan.entries = [{ input, key: "core", target: "core",
+        outputDirectory: path.join(subject.outputRoot, "core") }];
+    writeFile(subject.outputRoot, ".compat/utility-full/css/utility.full.css", "");
+
+    try
+    {
+        materializeGeneratedPackaging(subject.plan);
+        const kit = path.join(subject.outputRoot, `${edition}kit`);
+
+        assert.equal(fs.readFileSync(path.join(kit, "README.md"), "utf8"), files["README.md"]);
+        assert.equal(fs.existsSync(path.join(kit, "manifest.json.gz")), true);
+        assert.equal(portKitDigest(kit, { skipGzip: true }), digest);
+        assert.notEqual(portKitDigest(kit), digest);
+
+        fs.writeFileSync(path.join(kit, "README.md"), "changed\n");
+        assert.throws(() => assertShippedPortKits(subject.outputRoot), /shipped port kit does not give its pinned digest/);
+
+        fs.writeFileSync(path.join(subject.sourceRoot, `${edition}kit/README.md`), "changed\n");
+        assert.throws(() => materializeGeneratedPackaging(subject.plan), /port kit does not give its pinned digest: core\/contracts\/ports\/simai.example-port\/1.0.0/);
+    }
+    finally
+    {
+        fs.rmSync(subject.workspace, { force: true, recursive: true });
+    }
 });
