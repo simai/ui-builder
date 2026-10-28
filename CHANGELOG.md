@@ -27,6 +27,17 @@ All notable changes to `ui-builder` are documented in this file.
   `traits`, `words`, `css-variables`). x-registry, x-rule, x-decisions,
   relations, aliases and examples stay in the source. A source without the
   list embeds the whole file, as before.
+- Inside the kept keys a bundle also drops what only the docs and the tools
+  read (2026-10-28): the source's `component_manifest_drop` in the same
+  contract (`$comment`, `description`, `examples`, `summary`, `x-detail`,
+  `x-markup`, `x-note`, `x-outcomes`, `x-returns`, `x-shape`, `x-summary`
+  at ui-source core.runtime 1.3.1). A key named there is dropped at least
+  two levels under a kept key -- `settings.<name>.summary`,
+  `events.<verb>.carries.<field>.summary` -- never as a name itself (the
+  setting `settings.description` stays). Over the 59 Smart manifests of
+  standard 1.4 phase A the embedded manifests go from 180.0 to 98.2 KB
+  minified (60.7 to 28.6 KB gzip, each gzipped alone). A source without the
+  list keeps the kept keys whole.
 - The smart and package builds write `<diagnostics>.runtime.json`
   (`simai.framework.shared-runtime-usage` v1: the ABI and, per runtime
   module, the names the bundles import); `verify-package-reproducibility`

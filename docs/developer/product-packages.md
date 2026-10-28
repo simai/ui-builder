@@ -87,7 +87,10 @@ is still accepted, so the four components can move without touching their lock.
 - A bundle embeds only the keys of its `component.json` the runtime reads
   (the contract's `component_manifest_keys`, `libs/componentManifestEmbed.js`);
   a package component's code that reads another key off its manifest must
-  get it added there in ui-source.
+  get it added there in ui-source. Inside those keys it drops the contract's
+  `component_manifest_drop` (`summary`, `examples`, the tools' `x-` words)
+  from two levels down: a package component reads none of them at runtime
+  and names no member (a carried field, a `with` parameter) like one.
 - A component that needs another Smart element on the page asks for it by
   tag; it does not import that element's `index.js` (the Loader defines it
   from its own bundle). An import puts a second copy of the element, and of
