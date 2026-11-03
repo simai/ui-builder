@@ -285,6 +285,40 @@ run the package's tests and probes, commit, build, and write the receipt with
 package reference for the name and the package rules' relations changed, the
 reference must say so in that free release, or the receipt refuses.
 
+## Component sets
+
+A component set (standard `simai.component-set` 1.0.0, ui-source
+`docs/developer/component-sets.md`) is a package with a passport. Its package
+folder holds `set.json` and a `package.json` whose `simai.api` names the rule
+whose bundle gives the set's exports (`SF.package('<set>')`). The build then:
+
+- writes `api: "cl-<x>"` into `smart/rule.js` (only for a set; a package
+  without `simai.api` keeps the rule file byte for byte);
+- copies `set.json` beside `smart/` in the output, and the report gets a `set`
+  block (the passport, its sha256, the api);
+- the receipt (`write-package-receipt.py`) checks the passport against the
+  build -- id, licence, ui-source revision, components, elements, folders,
+  families, api -- and, with `--registry`, against the shared name registry.
+
+A set whose built output is kept in its own repository is released by
+`scripts/publish-package-release.sh` (never on `main`, never pushed): one
+`Build: <set> <subject>` commit lays the output and its receipt into
+`<package path>/dist`, and one `Bind the <set> release <set>-<12>` commit
+writes `contracts/releases/<set>-<12>.lock.json`
+(`simai.framework.package-release-lock` v1). `<12>` is the set commit the build
+was made from. `scripts/bind-package-release.py check --repo <set repository>`
+is the release gate: every lock agrees with git, the output at each Build
+commit is byte for byte what its receipt lists, and the output at HEAD is the
+newest release's build. The passport stamped with the release block
+(`--set-out`) is a release asset; the `set.json` in the repository stays the
+bytes the receipt hashed.
+
+`scripts/set-index.py add` writes the release's row into the one
+compatibility index (`simai.framework.set-index` v1, published as
+`@simai-studio/sets`, `index.json`), from the stamped passport and the lock;
+it refuses a release over no free pair and a version already indexed.
+`set-index.py check` is the index's gate.
+
 ## SIMAI Framework Pro
 
 SIMAI Framework Pro is dropped; its four components move into Larena's package.

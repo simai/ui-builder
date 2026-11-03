@@ -406,35 +406,56 @@ function defaultRuleFileHeader(packageName)
     ];
 }
 
-function renderPackageRuleFile(packageName, rules, header = defaultRuleFileHeader(packageName))
+// The rule a component set names as its api (package.json simai.api,
+// standard simai.component-set): the element whose bundle gives the set's
+// exports, which SF.package(<name>) asks for. Only a set has one; without it
+// the rule file is byte for byte what it was before sets.
+const API_RULE = /^cl-[a-z][a-z0-9-]*$/u;
+
+function renderPackageRuleFile(packageName, rules, header = defaultRuleFileHeader(packageName), { api } = {})
 {
     assertPackageName(packageName);
+
+    if (api !== undefined && (!API_RULE.test(String(api)) || !Object.prototype.hasOwnProperty.call(rules, api)))
+    {
+        throw new Error(`package ${packageName}: api ${String(api)} is not one of its rules`);
+    }
 
     return [
         ...header,
         `SF.RuleLoader.registerPackage(${JSON.stringify(packageName)}, {`,
+        ...(api === undefined ? [] : [`  api: ${JSON.stringify(api)},`]),
         `  rules: ${JSON.stringify(rules, null, 2).split("\n").join("\n  ")},`,
         "});",
         "",
     ].join("\n");
 }
 
-/** Read back the rules a generated package rule file registers. */
+// A generated rule file: comment lines, then registerPackage with an optional
+// api line and the rules. ui-builder's three readers (here,
+// write-package-receipt.py, bind-package-release.py) hold the same form.
+const RULE_FILE_FORM = /^(?:\/\/[^\n]*\n)*SF\.RuleLoader\.registerPackage\("([a-z][a-z0-9-]*)", \{\n(?: {2}api: "(cl-[a-z][a-z0-9-]*)",\n)? {2}rules: ([\s\S]*),\n\}\);\n$/u;
+
+/** Read back the rules (and the api rule, when there is one) a generated package rule file registers. */
 function readPackageRuleFile(source)
 {
-    const match = /^(?:\/\/[^\n]*\n)*SF\.RuleLoader\.registerPackage\("([a-z][a-z0-9-]*)", \{\n {2}rules: ([\s\S]*),\n\}\);\n$/u.exec(source);
+    const match = RULE_FILE_FORM.exec(source);
 
     if (!match)
     {
         throw new Error("not a generated package rule file");
     }
 
-    return { packageName: match[1], rules: JSON.parse(match[2]) };
+    return {
+        packageName: match[1],
+        rules: JSON.parse(match[3]),
+        ...(match[2] ? { api: match[2] } : {}),
+    };
 }
 
 /**
  * Write <outputRoot>/smart/rule.js for a package. `pkg` is
- * {name, components, header?}.
+ * {name, components, header?, api?}.
  */
 function materializePackageRule(plan, pkg)
 {
@@ -443,6 +464,7 @@ function materializePackageRule(plan, pkg)
         pkg.name,
         collectPackageRules(plan.sourceRoot, pkg.components),
         pkg.header,
+        pkg.api === undefined ? {} : { api: pkg.api },
     );
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.writeFileSync(destination, payload);

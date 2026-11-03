@@ -24,9 +24,17 @@ With `--ui`, the package is also checked against the free release:
   the release's `distr/smart`, and each entry's `requires` equal to its rule's
   relations as registry ids. A missing reference is a warning, not a failure.
 
+A component set (standard simai.component-set) carries its passport,
+set.json, beside smart/ in the output. Its receipt adds a `set` block, and the
+passport is checked against the build: the same id, rules, elements and api,
+the licence of package.json, the ui-source revision the build was over; with
+`--registry` (ui-source contracts/registry/names.json, read from main), the
+families it claims are the ones the shared name registry gives it. A set has
+no package reference in the free release: SIMAI Framework keeps none.
+
 Usage:
   write-package-receipt.py --report WORKSPACE/report.json [--ui UI]
-      [--output FILE] [--archive FILE]
+      [--registry NAMES_JSON] [--output FILE] [--archive FILE]
 """
 import argparse
 import hashlib
@@ -43,7 +51,8 @@ SCHEMA_ID = 'simai.framework.product-package-receipt'
 SCHEMA_VERSION = 1
 RUNTIME_PATH = 'smart'
 RULE_FILE = 'smart/rule.js'
-RULE_FILE_PATTERN = re.compile(r'(?s)(?://[^\n]*\n)*SF\.RuleLoader\.registerPackage\("([a-z][a-z0-9-]*)", \{\n  rules: (.*),\n\}\);\n')
+RULE_FILE_PATTERN = re.compile(r'(?s)(?://[^\n]*\n)*SF\.RuleLoader\.registerPackage\("([a-z][a-z0-9-]*)", \{\n(?:  api: "(cl-[a-z][a-z0-9-]*)",\n)?  rules: (.*),\n\}\);\n')
+SET_PASSPORT = 'set.json'
 RELEASE_LOCK = re.compile(r'ui-[0-9a-f]{12}\.lock\.json')
 # An SPDX license expression: ids (`Apache-2.0`, `LicenseRef-SIMAI-Commercial`,
 # `GPL-2.0-or-later`, `MIT+`), AND / OR / WITH, parentheses. npm's
@@ -96,7 +105,68 @@ def read_rule_file(path):
     match = RULE_FILE_PATTERN.fullmatch(Path(path).read_text())
     if not match:
         raise ReceiptError(f'{path}: not a generated package rule file')
-    return match.group(1), json.loads(match.group(2))
+    return match.group(1), json.loads(match.group(3))
+
+
+def read_rule_api(path):
+    match = RULE_FILE_PATTERN.fullmatch(Path(path).read_text())
+    return match.group(2) if match else None
+
+
+def check_set(report, output_root, name, rules, licence, registry_path):
+    """A component set's passport against its own build (and the registry)."""
+    path = Path(output_root) / SET_PASSPORT
+    data = path.read_bytes()
+    if sha(data) != report['set']['sha256']:
+        raise ReceiptError(f'{SET_PASSPORT} is not the passport the build copied')
+    passport = json.loads(data)
+    problems = []
+    if passport.get('id') != name:
+        problems.append(f'id {passport.get("id")}, built as {name}')
+    if passport.get('licence', {}).get('spdx') != licence['ref']:
+        problems.append(f'licence {passport.get("licence", {}).get("spdx")}, package.json says {licence["ref"]}')
+    if passport.get('framework', {}).get('source_revision') != report['source_revision']:
+        problems.append(f'framework.source_revision {passport.get("framework", {}).get("source_revision")}, built over {report["source_revision"]}')
+    components = passport.get('components') or []
+    if sorted(item.get('rule') for item in components) != sorted(rules):
+        problems.append(f'components name {sorted(item.get("rule") for item in components)}, the rule file {sorted(rules)}')
+    families = set(passport.get('families') or [])
+    for item in components:
+        rule = rules.get(item.get('rule')) or {}
+        tags = rule.get('tags') or []
+        if not tags or tags[0] != item.get('element'):
+            problems.append(f'{item.get("rule")}: element {item.get("element")}, the rule says {tags[:1]}')
+        if item.get('folder') != str(item.get('rule', ''))[3:]:
+            problems.append(f'{item.get("rule")}: folder {item.get("folder")}')
+        if str(item.get('element', '')).split('-')[1:2] and str(item.get('element')).split('-')[1] not in families:
+            problems.append(f'{item.get("element")}: family not in {sorted(families)}')
+    api = read_rule_api(Path(output_root) / RULE_FILE)
+    if report['set'].get('api') != api or (api is not None and api not in rules):
+        problems.append(f'api {report["set"].get("api")} in package.json, {api} in the rule file')
+    registry = {'status': 'not-checked'}
+    if registry_path:
+        names = json.loads(Path(registry_path).read_text())
+        owner = next((item for item in names.get('owners', []) if item.get('id') == name), None)
+        if owner is None:
+            problems.append(f'the registry has no owner {name}')
+        else:
+            if sorted(owner.get('families', [])) != sorted(families):
+                problems.append(f'families {sorted(families)}, the registry gives {sorted(owner.get("families", []))}')
+            if owner.get('repository') != passport.get('repository'):
+                problems.append(f'repository {passport.get("repository")}, the registry says {owner.get("repository")}')
+            registry = {'status': 'agrees', 'sha256': sha(Path(registry_path).read_bytes())}
+    if problems:
+        raise ReceiptError('the set passport and the build disagree:\n  ' + '\n  '.join(problems))
+    return {
+        'id': name,
+        'passport': SET_PASSPORT,
+        'sha256': report['set']['sha256'],
+        'api': api,
+        'families': sorted(families),
+        'framework': passport['framework'],
+        'requires_sets': passport.get('requires_sets', []),
+        'registry': registry,
+    }
 
 
 def deterministic_tar(root, files):
@@ -157,7 +227,7 @@ def resolve_release(ui_root, source_revision):
     return found[-1], [lock['compatibility_id'] for lock in found]
 
 
-def check_against_release(ui_root, release_lock, name, rules, folders, output_root):
+def check_against_release(ui_root, release_lock, name, rules, folders, output_root, is_set=False):
     framework = release_lock['compatibility_id']
     release = release_lock['runtime_sources']['core']['revision']
     # Contracts are read where the release's own lock is: the bind commit that
@@ -179,6 +249,9 @@ def check_against_release(ui_root, release_lock, name, rules, folders, output_ro
 
     reference_path = f'distr/core/contracts/packages/{name}.package.json'
     result = {'path': reference_path, 'release': framework}
+    if is_set:
+        # A set describes itself (set.json); SIMAI Framework keeps no reference.
+        return {**result, 'status': 'set-passport'}
     if not exists(ui_root, bind, reference_path):
         warn(f'{framework} publishes no package reference {reference_path}; the rules are not checked against one')
         return {**result, 'status': 'absent'}
@@ -339,6 +412,8 @@ def build_receipt(args):
 
     source = report['package_source']
     licence = read_licence(source['root'], source['revision'], source['path'])
+    is_set = bool(report.get('set'))
+    set_block = check_set(report, output_root, name, rules, licence, args.registry) if is_set else None
 
     archive = deterministic_tar(output_root, files)
     archive_path = Path(args.archive) if args.archive else workspace / f'package-{name}.tar'
@@ -360,7 +435,7 @@ def build_receipt(args):
             framework['release'] = release_lock['compatibility_id']
             if len(candidates) > 1:
                 framework['release_candidates'] = candidates
-            reference = check_against_release(args.ui, release_lock, name, rules, folders, output_root)
+            reference = check_against_release(args.ui, release_lock, name, rules, folders, output_root, is_set)
             framework['runtime_check'] = check_runtime_against_release(args.ui, release_lock, report.get('runtime'))
 
     by_path = {item['path']: item for item in files}
@@ -413,6 +488,7 @@ def build_receipt(args):
             ],
         },
         'package_reference': reference,
+        **({'set': set_block} if set_block else {}),
         'files': files,
         'claims': {'production_ready': False},
     }
@@ -432,6 +508,7 @@ def main():
     parser = argparse.ArgumentParser(description='Write package-receipt.json for a product package build.')
     parser.add_argument('--report', type=Path, required=True, help='report.json of verify-package-reproducibility.cjs')
     parser.add_argument('--ui', type=Path, help='a ui checkout: resolve the free release and check the package against it')
+    parser.add_argument('--registry', type=Path, help='a component set: the shared name registry (ui-source contracts/registry/names.json at main)')
     parser.add_argument('--output', type=Path, help='default: package-receipt.json beside the report')
     parser.add_argument('--archive', type=Path, help='default: package-<name>.tar beside the report')
     args = parser.parse_args()

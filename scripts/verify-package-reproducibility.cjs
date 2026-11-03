@@ -117,6 +117,47 @@ function repositoryIdentity(root)
     return github ? github[1] : url || null;
 }
 
+/** A file of the package folder at the built commit, or null when it is absent. */
+function packageFile(context, commit, relative)
+{
+    const where = context.packagePath ? `${context.packagePath}/${relative}` : relative;
+    const listed = git(context.repositoryRoot, ["ls-tree", "--name-only", commit, where]).trim();
+
+    return listed === where ? git(context.repositoryRoot, ["show", `${commit}:${where}`], { encoding: null }) : null;
+}
+
+/**
+ * What a component set adds to a package build (standard simai.component-set):
+ * its passport set.json, copied into the output beside smart/ unchanged, and
+ * the api rule its package.json names (simai.api). A package without a
+ * passport builds exactly as before.
+ */
+function setOf(context, commit)
+{
+    const passport = packageFile(context, commit, "set.json");
+    const manifest = packageFile(context, commit, "package.json");
+    const api = manifest ? JSON.parse(manifest.toString("utf8"))?.simai?.api : undefined;
+
+    if (!passport)
+    {
+        return { passport: null, api };
+    }
+
+    const value = JSON.parse(passport.toString("utf8"));
+
+    if (value.schema !== "simai.framework.component-set" || value.schema_version !== 1)
+    {
+        throw new Error("set.json is not a component set passport (simai.framework.component-set, schema_version 1)");
+    }
+
+    if (value.id !== context.packageName)
+    {
+        throw new Error(`set.json is the passport of set ${String(value.id)}, built as ${context.packageName}`);
+    }
+
+    return { passport, api };
+}
+
 function runWave(waveName, context)
 {
     const waveRoot = path.join(context.workspaceRoot, waveName);
@@ -144,10 +185,13 @@ function runWave(waveName, context)
         });
     }
 
+    const set = setOf(context, overlay.package_revision);
+
     runNode([
         path.join(__dirname, "run-package-product-build.cjs"),
         "--package", context.packageName,
         "--components", overlay.components.join(","),
+        ...(set.api ? ["--api", set.api] : []),
         BUILDER_ROOT,
         path.join(overlayRoot, "src"),
         outputRoot,
@@ -169,11 +213,18 @@ function runWave(waveName, context)
         throw new Error(`${waveName}/package has diagnostics`);
     }
 
-    // The product is the package's own folders and the rule file, nothing else.
+    if (set.passport)
+    {
+        fs.writeFileSync(path.join(outputRoot, "set.json"), set.passport);
+    }
+
+    // The product is the package's own folders and the rule file, nothing
+    // else, and a set's passport beside them.
     const top = fs.readdirSync(path.join(outputRoot, "smart")).sort();
     const expected = [...overlay.components, path.basename(RULE_FILE), `${path.basename(RULE_FILE)}.gz`].sort();
+    const root = fs.readdirSync(outputRoot).sort().join();
 
-    if (JSON.stringify(top) !== JSON.stringify(expected) || fs.readdirSync(outputRoot).join() !== "smart")
+    if (JSON.stringify(top) !== JSON.stringify(expected) || root !== (set.passport ? "set.json,smart" : "smart"))
     {
         throw new Error(`${waveName}/package holds ${top.join(", ")}; expected ${expected.join(", ")}`);
     }
@@ -186,6 +237,7 @@ function runWave(waveName, context)
 
     return {
         ...overlay,
+        ...(set.passport ? { set: { passport: "set.json", sha256: sha256(set.passport), api: set.api || null } } : {}),
         runtime,
         files,
         files_count: files.length,
@@ -324,6 +376,7 @@ function main()
         report.package_source.revision = first.package_revision;
         report.source_revision = first.source_revision;
         report.components = first.components;
+        if (first.set) report.set = first.set;
         report.runtime = first.runtime;
         report.output = path.join("wave-1", "output", "package", context.packageName).split(path.sep).join("/");
         report.products = {

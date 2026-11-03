@@ -57,29 +57,16 @@ DEFAULTS = {
 }
 
 
-class ReleaseError(ValueError):
-    """The Pro release disagrees with itself, with git or with the free release."""
-
-
-def sha(data):
-    return hashlib.sha256(data).hexdigest()
-
-
-def git(root, *args):
-    return subprocess.check_output(['git', '-C', str(root), *args])
-
-
-def text(root, *args):
-    return git(root, *args).decode().strip()
-
-
-def exists(root, revision, path):
-    return subprocess.run(['git', '-C', str(root), 'cat-file', '-e', f'{revision}:{path}'], capture_output=True).returncode == 0
-
-
-def write(path, value):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + '\n')
+# The helpers every set release shares (scripts/bind-package-release.py):
+# hashing, git reads, the free release lock and the output check. Pro keeps
+# its own lock schema and owner manifest; the bytes are checked by one code.
+_spec = importlib.util.spec_from_file_location('bind_package_release', BUILDER_ROOT / 'scripts/bind-package-release.py')
+shared = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(shared)
+ReleaseError = shared.ReleaseError
+sha, git, text, exists, write = shared.sha, shared.git, shared.text, shared.exists, shared.write
+writer, tree_entry, input_entry, framework_lock = shared.writer, shared.tree_entry, shared.input_entry, shared.framework_lock
+files_under = shared.files_under
 
 
 def load_registry_builder(ui_root):
@@ -94,47 +81,7 @@ def load_registry_builder(ui_root):
 
 def read_rule_file(path):
     """The rules a generated package rule file registers (it is plain data)."""
-    source = Path(path).read_text()
-    match = re.fullmatch(r'(?s)(?://[^\n]*\n)*SF\.RuleLoader\.registerPackage\("([a-z][a-z0-9-]*)", \{\n  rules: (.*),\n\}\);\n', source)
-    if not match or match.group(1) != PACKAGE:
-        raise ReleaseError(f'{path}: not a generated "{PACKAGE}" package rule file')
-    return json.loads(match.group(2))
-
-
-def writer(root, revision, path):
-    commit = text(root, 'log', '-1', '--format=%H', revision, '--', path)
-    if not commit:
-        raise ReleaseError(f'no commit in {root} has written {path}')
-    return commit
-
-
-def tree_entry(root, revision, path):
-    return {
-        'revision': revision,
-        'tree': text(root, 'rev-parse', revision + '^{tree}'),
-        'runtime_path': path,
-        'runtime_tree': text(root, 'rev-parse', f'{revision}:{path}'),
-        'archive_sha256': sha(git(root, 'archive', '--format=tar', revision, path)),
-    }
-
-
-def input_entry(owner, root, revision):
-    return {
-        'owner': owner,
-        'commit': revision,
-        'tree': text(root, 'rev-parse', revision + '^{tree}'),
-        'archive_sha256': sha(git(root, 'archive', '--format=tar', revision)),
-    }
-
-
-def framework_lock(ui_root, framework):
-    path = Path(ui_root) / 'contracts/releases' / f'{framework}.lock.json'
-    if not re.fullmatch(r'ui-[0-9a-f]{12}', framework) or not path.is_file():
-        raise ReleaseError(f'no free release {framework} in {ui_root}/contracts/releases')
-    lock = json.loads(path.read_text())
-    if lock.get('schema_version') != 2 or lock.get('compatibility_id') != framework:
-        raise ReleaseError(f'{framework}: not a v2 Framework release lock')
-    return lock
+    return shared.read_rule_file(path, PACKAGE)[2]
 
 
 def expected_requires(rules, ui_root, revision):
@@ -188,30 +135,9 @@ def check_package(ui_root, framework, smart_root):
     print(json.dumps({'package': PACKAGE, 'framework': framework, 'rules': sorted(rules), 'agrees': True}))
 
 
-def files_under(root, current=None):
-    """In the order verify-pro-reproducibility.cjs hashes: each directory's
-    entries by name, a directory expanded where it falls."""
-    current = current or root
-    found = []
-    for path in sorted(Path(current).iterdir(), key=lambda item: item.name):
-        if path.is_dir():
-            found.extend(files_under(root, path))
-        else:
-            data = path.read_bytes()
-            found.append({'path': path.relative_to(root).as_posix(), 'sha256': sha(data), 'size': len(data)})
-    return found
-
-
 def check_output(report_path):
     """The build output is the passing, byte-identical one the report hashed."""
-    report = json.loads(Path(report_path).read_text())
-    pro = (report.get('products') or {}).get('pro') or {}
-    if report.get('status') != 'PASS' or not pro.get('byte_identical'):
-        raise ReleaseError('the reproducibility report did not pass')
-    output = Path(report_path).parent / 'wave-1/output/pro'
-    files = files_under(output)
-    if sha((json.dumps(files, separators=(',', ':')) + '\n').encode()) != pro['manifest_sha256']:
-        raise ReleaseError(f'{output} is not the output the report hashed')
+    report, _ = shared.check_output(report_path, 'pro')
     print(report['pro_revision'], report['source_revision'])
 
 

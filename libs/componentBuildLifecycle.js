@@ -205,7 +205,15 @@ function validatePackageDefinition(value)
         throw new TypeError("options.package.components must be distinct component folder names");
     }
 
+    // A component set names the rule whose bundle gives its exports
+    // (package.json simai.api); the rule file then carries `api`.
+    if (value.api !== undefined && (typeof value.api !== "string" || !/^cl-[a-z][a-z0-9-]*$/u.test(value.api)))
+    {
+        throw new TypeError("options.package.api must be a rule name cl-<folder>");
+    }
+
     return Object.freeze({
+        ...(value.api === undefined ? {} : { api: value.api }),
         components: Object.freeze([...value.components].sort()),
         name: value.name,
     });

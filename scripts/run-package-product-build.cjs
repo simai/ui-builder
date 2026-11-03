@@ -8,8 +8,12 @@
 // materializePackageOverlay). Output: <out>/smart/<folder> for each component
 // and <out>/smart/rule.js, which registers the package `<name>`.
 //
-// usage: run-package-product-build.cjs --package <name> --components <list>
+// usage: run-package-product-build.cjs --package <name> --components <list> [--api <rule>]
 //            <builderRoot> <sourceRoot> <outputRoot> <diagnosticsPath>
+//
+// --api names the rule whose bundle gives a component set's exports
+// (standard simai.component-set; the package folder's package.json simai.api):
+// the rule file then registers it as `api`.
 
 const fs = require("node:fs");
 const path = require("node:path");
@@ -28,7 +32,7 @@ const ARGUMENT_NAMES = Object.freeze([
     "outputRoot",
     "diagnosticsPath",
 ]);
-const OPTION_NAMES = Object.freeze(["--package", "--components"]);
+const OPTION_NAMES = Object.freeze(["--package", "--components", "--api"]);
 
 function splitOptions(received)
 {
@@ -234,6 +238,7 @@ if (usage)
     const buildOptions = {
         outputRoot,
         package: {
+            ...(packageOptions.api ? { api: packageOptions.api } : {}),
             components: packageOptions.components.split(","),
             name: packageOptions.package,
         },
