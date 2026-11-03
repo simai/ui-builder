@@ -196,8 +196,11 @@ def check_against_release(ui_root, release_lock, name, rules, folders, output_ro
         rule = rules.get(rule_name)
         if rule is None:
             continue
-        if rule.get('tags') != [item['element']]:
-            problems.append(f'{rule_name}: tags {rule.get("tags")}, the reference says {item["element"]}')
+        # A renamed element keeps its former tags as dated aliases (rename plan
+        # R0): the rule lists the element first, then each former tag.
+        element_tags = [item['element'], *(alias['from'] for alias in item.get('element_aliases', []))]
+        if rule.get('tags') != element_tags:
+            problems.append(f'{rule_name}: tags {rule.get("tags")}, the reference says {element_tags}')
         if item['folder'] not in folders or not (Path(output_root) / RUNTIME_PATH / item['folder']).is_dir():
             problems.append(f'{rule_name}: no folder {item["folder"]} in the build output')
         if exists(ui_root, release, f'distr/smart/{item["folder"]}'):

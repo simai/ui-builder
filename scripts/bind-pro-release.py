@@ -172,8 +172,11 @@ def check_package(ui_root, framework, smart_root):
         rule = rules.get(name)
         if rule is None:
             continue
-        if rule.get('tags') != [item['element']]:
-            problems.append(f'{name}: tags {rule.get("tags")}, the reference says {item["element"]}')
+        # A renamed element keeps its former tags as dated aliases (rename plan
+        # R0): the rule lists the element first, then each former tag.
+        element_tags = [item['element'], *(alias['from'] for alias in item.get('element_aliases', []))]
+        if rule.get('tags') != element_tags:
+            problems.append(f'{name}: tags {rule.get("tags")}, the reference says {element_tags}')
         if not (Path(smart_root) / item['folder']).is_dir():
             problems.append(f'{name}: no folder {item["folder"]} in the build output')
         if exists(ui_root, release, f'distr/smart/{item["folder"]}'):

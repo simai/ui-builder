@@ -346,6 +346,21 @@ test("the receipt names the package, its source, the free release, the builder a
     assert.match(listing.stdout, /smart\/widget\/css\/widget\.css/u);
 });
 
+test("a renamed package element lists its former tags after it, as the reference's element_aliases say", () => {
+    const source = "f".repeat(40);
+    const renamed = { ...REFERENCE, provides: [REFERENCE.provides[0], { ...REFERENCE.provides[1], element_aliases: [{ from: "sf-old-widget", since: "2026-11-03", remove_after: "2027-01-01" }] }] };
+    const { ui } = freeRelease(source, renamed);
+    const both = packageWorkspace(source, { ...RULES, "cl-widget": { ...RULES["cl-widget"], tags: ["sf-widget", "sf-old-widget"] } });
+    const agreed = receipt(both.workspace, ui);
+    assert.equal(agreed.result.status, 0, agreed.result.stderr);
+    assert.equal(agreed.value.package_reference.status, "agrees");
+
+    const newOnly = packageWorkspace(source, RULES);
+    const refused = receipt(newOnly.workspace, ui);
+    assert.equal(refused.result.status, 1);
+    assert.match(refused.result.stderr, /cl-widget: tags \['sf-widget'\], the reference says \['sf-widget', 'sf-old-widget'\]/u);
+});
+
 test("a missing package reference is a warning; a disagreeing one, a dangling relation or a free element fail", () => {
     const source = "d".repeat(40);
     const absent = freeRelease(source, null);
