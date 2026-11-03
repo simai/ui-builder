@@ -183,6 +183,34 @@ def smart_tree_files(root,revision,tree):
  return git(root,'ls-tree','-r','--name-only',revision,'--',tree+'/').decode().splitlines()
 
 
+# Keys of an owner-manifest entry that are facts of the bytes, the rule and the
+# id; every other key is a curated decision and follows a renamed component.
+BYTE_FACTS=frozenset({'id','kind','name','owner','provenance','documentation_refs','runtime','requires'})
+
+
+def tag_aliases(source_root,source_revision,name,tags):
+ """The old tags the source declares for src/smart/<name>: its aliases.json rows
+ of kind "tag" (docs/developer/change-lifecycle.md, Renaming a tag) whose new tag
+ is one of the rule's tags and whose old tag the rule still lists, so the
+ Loader maps old-tag markup to this component. A component with no
+ aliases.json declares none."""
+ found=subprocess.run(['git','-C',str(source_root),'show',source_revision+':src/smart/'+name+'/aliases.json'],capture_output=True)
+ if found.returncode!=0:return set()
+ table=json.loads(found.stdout)
+ return {row['from'] for row in table.get('aliases',[]) if row.get('kind')=='tag' and row.get('to') in tags and row.get('from') in tags}
+
+
+def same_component(old_tags,new_tags,aliased):
+ """A dropped entry and an added one are one renamed component when their tags
+ are the same (a folder and rule rename: inputs -> input), or when the old tags
+ are all still on the new rule and at least one of them is a tag alias the
+ source declares (a tag rename: sf-close -> sf-button-close, the rule listing
+ both until the alias is swept)."""
+ old,new=set(old_tags),set(new_tags)
+ if not old:return False
+ return old==new or (old<=new and bool(old&aliased))
+
+
 def sync_smart_entries(manifest,ui_root,smart_revision,release,source_root,source_revision,provided,relation_id):
  """Make the Smart owner manifest list exactly the Smart components the release ships.
 
@@ -200,8 +228,11 @@ def sync_smart_entries(manifest,ui_root,smart_revision,release,source_root,sourc
  input/cl-input, and its id smart.inputs -> smart.input) is one component, not
  one dropped and one new: an added entry whose tags are a dropped entry's takes
  that entry's curated decisions (title, lifecycle, readiness, examples,
- curated_for), and every other entry that required the old id requires the new
- one. `requires` itself is a fact of the rule, as the registry checks it
+ curated_for: every key that is not a fact of the bytes), and every other
+ entry that required the old id requires the new one. A tag rename
+ (sf-close -> sf-button-close, close -> button-close, smart.close ->
+ smart.button-close) is the same: the new rule lists the old tag after the new
+ one and the source's aliases.json declares it as a kind "tag" alias. `requires` itself is a fact of the rule, as the registry checks it
  (smart_rule_relations_mismatch), so it is recounted for every entry.
  """
  files=smart_tree_files(ui_root,smart_revision,SMART_TREE)
@@ -250,11 +281,11 @@ def sync_smart_entries(manifest,ui_root,smart_revision,release,source_root,sourc
    'requires':requires_of(rule),
    'curated_for':[],
   })
-  tags=sorted(rule.get('tags',[]))
-  renamed=[entry for entry in dropped if tags and sorted(entry['runtime'].get('tags',[]))==tags]
+  aliased=tag_aliases(source_root,source_revision,name,rule.get('tags',[]))
+  renamed=[entry for entry in dropped if same_component(entry['runtime'].get('tags',[]),rule.get('tags',[]),aliased)]
   if len(renamed)==1:
-   for key in ('title','lifecycle','readiness','example_refs','curated_for'):
-    added[-1][key]=copy.deepcopy(renamed[0][key])
+   for key,value in renamed[0].items():
+    if key not in BYTE_FACTS:added[-1][key]=copy.deepcopy(value)
    added[-1]['renamed_from']=renamed[0]['id']
  renames={entry.pop('renamed_from'):entry['id'] for entry in added if 'renamed_from' in entry}
  for old,new in renames.items():print('Renamed in the ui Smart owner manifest (curated decisions kept): '+old+' -> '+new)
