@@ -46,6 +46,9 @@ function createPostcssPresetEnvOptions(options = {})
             // Ancestor [dir] selectors match both directions in nested contexts.
             // Keep the native pseudo-class; the final policy emits isolated legacy rules.
             "dir-pseudo-class": false,
+            // :has() stays native: its polyfill needs a script no page loads,
+            // so the rewritten [\:has\(...\)] selectors would be dead bytes.
+            "has-pseudo-class": false,
             [LOGICAL_PROPERTIES_FEATURE]: {
                 ...logicalFeature,
                 preserve: true,

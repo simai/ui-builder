@@ -837,6 +837,7 @@ test("caller and configuration policy mutations are isolated at every nested lev
                 ["postcss-preset-env", {
                     features: {
                         "dir-pseudo-class": false,
+                        "has-pseudo-class": false,
                         "logical-properties-and-values": {
                             preserve: true,
                         },

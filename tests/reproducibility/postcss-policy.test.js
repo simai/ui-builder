@@ -126,6 +126,15 @@ test("plugin and loader helpers always expose the RTL-safe contract", () => {
     );
 });
 
+test(":has() stays native: no polyfill selector is written", async () => {
+    const result = await postcss([postcssPresetEnv(createPostcssPresetEnvOptions())]).process(
+        "html:has(.wide) { container-type: inline-size; }",
+        { from: undefined },
+    );
+    assert.equal(result.css.includes("[\\:has"), false, result.css);
+    assert.match(result.css, /html:has\(\.wide\)/u);
+});
+
 test("normal and compact inputs retain logical declarations after fallbacks", async () => {
     for (const input of [FIXTURE, FIXTURE.replaceAll(" ", "")])
     {
