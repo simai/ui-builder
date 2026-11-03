@@ -113,4 +113,8 @@ fs.writeFileSync(path.join(out, "README.md"), [
 ].join("\n"));
 
 const bytes = kept.reduce((sum, file) => sum + fs.statSync(path.join(out, file)).size, 0);
-console.log(JSON.stringify({ name, version, release: id, files: kept.length, distrBytes: bytes, out }));
+// The block author kit samples a host loads (distr/core/kits/, 2026-11-04):
+// counted so the publish route can refuse a pair whose source has them and
+// whose package does not.
+const blockKitFiles = kept.filter((file) => file.startsWith("distr/core/kits/")).length;
+console.log(JSON.stringify({ name, version, release: id, files: kept.length, blockKitFiles, distrBytes: bytes, out }));

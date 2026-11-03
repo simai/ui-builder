@@ -202,6 +202,43 @@ function assertShippedPortKits(outputRoot)
     }
 }
 
+// Block author kits (ui-source src/core/kits/, 2026-11-04): the sample blocks
+// a host loads -- type and editor manifests, words, a renderer module, its
+// sheet, its cases -- ship whole under core/kits/, whatever the extension, as
+// a port kit does. Before, kits/ stood outside the built tree and no host
+// could load a sample from the release (simai/ui-editor visual parity).
+const BLOCK_KITS_ROOT = "core/kits";
+
+function blockKitFiles(root)
+{
+    const kitsRoot = path.join(root, BLOCK_KITS_ROOT);
+
+    if (!fs.existsSync(kitsRoot) || !fs.lstatSync(kitsRoot).isDirectory())
+    {
+        return [];
+    }
+
+    return walkRegularFiles(kitsRoot, "block kit")
+        .map((file) => path.relative(root, file).split(path.sep).join("/"))
+        .sort(compareCodeUnits);
+}
+
+function assertShippedBlockKits(plan)
+{
+    if (!plan.entries.some((entry) => entry.target === "core"))
+    {
+        return;
+    }
+
+    for (const relative of blockKitFiles(plan.sourceRoot))
+    {
+        if (!fs.existsSync(path.join(plan.outputRoot, relative)))
+        {
+            throw new Error(`block kit file did not ship: ${relative}`);
+        }
+    }
+}
+
 const IMPORT_SPECIFIER = /(?:^|[;\s])(?:import|export)\s+(?:[^'";]*?\sfrom\s+)?["'](\.{1,2}\/[^"']+)["']|import\(\s*["'](\.{1,2}\/[^"']+)["']\s*\)/gu;
 
 function materializeSourceAssets(plan)
@@ -280,6 +317,13 @@ function materializeSourceAssets(plan)
     }
 
     const kitRoots = [];
+    const blockKitsRoot = path.join(sourceRoot, BLOCK_KITS_ROOT);
+
+    if (plan.entries.some((entry) => entry.target === "core")
+        && fs.existsSync(blockKitsRoot) && fs.lstatSync(blockKitsRoot).isDirectory())
+    {
+        kitRoots.push(fs.realpathSync(blockKitsRoot));
+    }
 
     for (const kit of portKits(sourceRoot))
     {
@@ -873,6 +917,7 @@ function materializeGeneratedPackaging(plan)
     const normalizedText = normalizeGeneratedTextWhitespace(plan.outputRoot);
     const gzip = materializeDeterministicGzip(plan.outputRoot);
     assertShippedPortKits(plan.outputRoot);
+    assertShippedBlockKits(plan);
 
     return {
         aggregateAssets,
@@ -887,6 +932,7 @@ function materializeGeneratedPackaging(plan)
 }
 
 module.exports = {
+    assertShippedBlockKits,
     assertShippedModuleImports,
     assertShippedPortKits,
     deterministicGzip,

@@ -496,6 +496,45 @@ test("a host port's conformance kit ships whole and its digest recomputes withou
         fs.rmSync(subject.workspace, { force: true, recursive: true });
     }
 });
+test("a block author kit under core/kits ships whole, every file whatever its extension", () => {
+    const subject = fixture();
+    const input = writeFile(subject.sourceRoot, "core/index.js", "export {};\n");
+    const files = {
+        "block/sample-quote/type.json": "{\"type\":\"sample.quote\"}\n",
+        "block/sample-quote/renderer.mjs": "export default () => '';\n",
+        "block/sample-quote/style.css": ".sample-quote {}\n",
+        "block/README.md": "# Kit\n",
+    };
+
+    for (const [relative, content] of Object.entries(files))
+    {
+        writeFile(subject.sourceRoot, `core/kits/${relative}`, content);
+    }
+
+    subject.plan.entries = [{ input, key: "core", target: "core",
+        outputDirectory: path.join(subject.outputRoot, "core") }];
+    writeFile(subject.outputRoot, ".compat/utility-full/css/utility.full.css", "");
+
+    try
+    {
+        const { assertShippedBlockKits } = require("../../libs/generatedPackaging");
+        materializeGeneratedPackaging(subject.plan);
+
+        for (const [relative, content] of Object.entries(files))
+        {
+            assert.equal(fs.readFileSync(path.join(subject.outputRoot, "core/kits", relative), "utf8"), content, relative);
+        }
+
+        assert.equal(fs.existsSync(path.join(subject.outputRoot, "core/kits/block/sample-quote/renderer.mjs.gz")), true);
+        fs.rmSync(path.join(subject.outputRoot, "core/kits/block/sample-quote/style.css"));
+        assert.throws(() => assertShippedBlockKits(subject.plan), /block kit file did not ship: core\/kits\/block\/sample-quote\/style.css/);
+    }
+    finally
+    {
+        fs.rmSync(subject.workspace, { force: true, recursive: true });
+    }
+});
+
 test("every sheet that uses the sf layers declares their order before its first rule", () => {
     const subject = fixture();
     const order = "@layer sf.reset, sf.tokens, sf.base, sf.utilities, sf.components, sf.overrides, sf.states;";
