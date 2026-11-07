@@ -15,9 +15,16 @@ release lock it was bound with.
   add     Add the row of a release (and the set's entry the first time).
           Refuses a release over no free pair, a version already indexed, and
           a passport that disagrees with its lock.
+  pair    Add a pair to a release row (pair-receipt.py publish): the release,
+          unchanged, re-receipted over another free pair (owner decision
+          2026-11-07, decision record ui-control
+          control/decisions/2026-11-07-set-pair-receipts.md). The row's facts
+          never change; its `pairs` list only grows, one entry per pair, never
+          the pair the release was built over.
   check   The index holds: the format, one row per set and version, ids that
           follow the source revision, every row's set listed, and rows in order
-          (by set, then by version).
+          (by set, then by version); each row's pairs are free pairs other
+          than its own, once each, in the order they were received.
 """
 import argparse
 import hashlib
@@ -34,7 +41,11 @@ HEX40 = re.compile(r'^[0-9a-f]{40}$')
 HEX64 = re.compile(r'^[0-9a-f]{64}$')
 DATE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 SET_KEYS = {'id', 'title', 'repository', 'npm', 'licence', 'docs'}
-ROW_KEYS = {'set', 'release', 'version', 'source_revision', 'framework', 'requires_sets', 'receipt_sha256', 'archive_sha256', 'published_on'}
+ROW_KEYS = {'set', 'release', 'version', 'source_revision', 'framework', 'requires_sets', 'receipt_sha256', 'archive_sha256', 'published_on', 'pairs'}
+# Keys a row may leave out: rows written before the archive digest, and rows with no pair receipt.
+OPTIONAL_ROW_KEYS = {'archive_sha256', 'pairs'}
+PAIR_KEYS = {'pair', 'source_revision', 'receipt_sha256', 'received_on'}
+PAIR_ID = re.compile(r'^ui-[0-9a-f]{12}$')
 EMPTY = {
     'schema': FORMAT,
     'schema_version': 1,
@@ -89,7 +100,7 @@ def problems(index):
     seen = set()
     for at, row in enumerate(rows):
         where = f'releases[{at}]'
-        if not set(row) <= ROW_KEYS or not (ROW_KEYS - {'archive_sha256'}) <= set(row):
+        if not set(row) <= ROW_KEYS or not (ROW_KEYS - OPTIONAL_ROW_KEYS) <= set(row):
             found.append(f'{where}: keys {sorted(row)}')
             continue
         if row['set'] not in listed:
@@ -110,12 +121,68 @@ def problems(index):
             found.append(f'{where}: digests')
         if not DATE.match(row['published_on']):
             found.append(f'{where}.published_on')
+        found.extend(pair_problems(row, where))
     order = [(row.get('set', ''), version_key(row['version'])) for row in rows if VERSION.match(str(row.get('version', '')))]
     if order != sorted(order):
         found.append('releases: not in order of set, then version')
     if [entry.get('id') for entry in sets] != sorted(entry.get('id') for entry in sets):
         found.append('sets: not in order of id')
     return found
+
+
+def pair_problems(row, where):
+    if 'pairs' not in row:
+        return []
+    pairs = row['pairs']
+    if not isinstance(pairs, list) or not pairs:
+        return [f'{where}.pairs: a non-empty list when present']
+    found = []
+    seen = set()
+    for at, entry in enumerate(pairs):
+        here = f'{where}.pairs[{at}]'
+        if not isinstance(entry, dict) or set(entry) != PAIR_KEYS:
+            found.append(f'{here}: keys')
+            continue
+        if not PAIR_ID.match(str(entry['pair'])) or entry['pair'] == (row.get('framework') or {}).get('pair') or entry['pair'] in seen:
+            found.append(f'{here}.pair: a free pair other than the row\'s own, once')
+        seen.add(entry['pair'])
+        if not HEX40.match(str(entry['source_revision'])) or not HEX64.match(str(entry['receipt_sha256'])):
+            found.append(f'{here}: revision or digest')
+        if not DATE.match(str(entry['received_on'])) or str(entry['received_on']) < row['published_on']:
+            found.append(f'{here}.received_on')
+    dates = [str(entry.get('received_on')) for entry in pairs if isinstance(entry, dict)]
+    if dates != sorted(dates):
+        found.append(f'{where}.pairs: not in the order they were received')
+    return found
+
+
+def pair(args):
+    index = read(args.index)
+    data = Path(args.receipt).read_bytes()
+    receipt = json.loads(data)
+    if receipt.get('schema') != 'simai.framework.set-pair-receipt' or receipt.get('status') != 'passed':
+        raise IndexError_('not a passed pair receipt (pair-receipt.py run)')
+    row = next((item for item in index['releases'] if item['set'] == receipt['set'] and item['release'] == receipt['release']), None)
+    if row is None:
+        raise IndexError_(f'{receipt["release"]} is not indexed: a pair receipt follows its release row')
+    if row['version'] != receipt['version'] or row['receipt_sha256'] != receipt['package']['receipt_sha256'] \
+            or row.get('archive_sha256', receipt['package']['archive_sha256']) != receipt['package']['archive_sha256']:
+        raise IndexError_(f'the pair receipt is not of the indexed {row["release"]} ({row["version"]})')
+    entry = {
+        'pair': receipt['pair']['id'],
+        'source_revision': receipt['pair']['source_revision'],
+        'receipt_sha256': hashlib.sha256(data).hexdigest(),
+        'received_on': args.received_on,
+    }
+    if entry['pair'] == row['framework']['pair'] or any(item['pair'] == entry['pair'] for item in row.get('pairs', [])):
+        raise IndexError_(f'{row["release"]} already runs over {entry["pair"]} in the index')
+    row.setdefault('pairs', []).append(entry)
+    found = problems(index)
+    if found:
+        raise IndexError_('the index would not hold:\n  ' + '\n  '.join(found))
+    write(args.index, index)
+    print(json.dumps({'release': row['release'], 'version': row['version'], 'pair': entry['pair'], 'index': str(args.index),
+                      'sha256': hashlib.sha256(Path(args.index).read_bytes()).hexdigest()}))
 
 
 def add(args):
@@ -177,17 +244,23 @@ def check(args):
 
 def main():
     parser = argparse.ArgumentParser(description='Write and check the compatibility index of component sets.')
-    parser.add_argument('command', choices=['add', 'check'])
+    parser.add_argument('command', choices=['add', 'pair', 'check'])
     parser.add_argument('--index', type=Path, required=True, help='index.json (created by add when missing)')
     parser.add_argument('--passport', type=Path, help='add: the stamped passport of the release')
     parser.add_argument('--lock', type=Path, help='add: the release lock')
     parser.add_argument('--published-on', help='add: the day the npm version was published (YYYY-MM-DD)')
+    parser.add_argument('--receipt', type=Path, help='pair: the pair receipt (pair-receipt.py run)')
+    parser.add_argument('--received-on', help='pair: the day the pair receipt was attached to the release (YYYY-MM-DD)')
     args = parser.parse_args()
     try:
         if args.command == 'add':
             if not (args.passport and args.lock and args.published_on and DATE.match(args.published_on)):
                 parser.error('add needs --passport, --lock and --published-on YYYY-MM-DD')
             add(args)
+        elif args.command == 'pair':
+            if not (args.receipt and args.received_on and DATE.match(args.received_on)):
+                parser.error('pair needs --receipt and --received-on YYYY-MM-DD')
+            pair(args)
         else:
             check(args)
     except IndexError_ as error:
