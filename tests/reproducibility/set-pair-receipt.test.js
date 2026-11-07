@@ -159,6 +159,72 @@ test("the index lists a pair once on its release row, never the row's own pair, 
     assert.match(run("python3", [INDEX, "check", "--index", indexPath]).stderr, /non-empty list/u);
 });
 
+test("publish attaches the receipt to the release with gh and adds the pair to the index row", () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "pair-publish-gh-"));
+    git(repo, "init", "-q", "-b", "main");
+    files(repo, { [`contracts/releases/${ID}.lock.json`]: lock() });
+    git(repo, "add", "-A");
+    git(repo, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "bind");
+
+    // A gh on PATH that records its arguments and the bytes it was asked to upload.
+    const bin = fs.mkdtempSync(path.join(os.tmpdir(), "pair-publish-bin-"));
+    const calls = path.join(bin, "calls.jsonl");
+    files(bin, { gh: `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+const file = args[3];
+fs.appendFileSync(${JSON.stringify(calls)}, JSON.stringify({ args, name: require("node:path").basename(file), bytes: fs.readFileSync(file, "utf8") }) + "\\n");
+` });
+    fs.chmodSync(path.join(bin, "gh"), 0o755);
+
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "pair-publish-gh-work-"));
+    // The receipt as run leaves it, under any name: the asset is always pair-receipt-<pair>.json.
+    files(work, { "receipt.json": receipt() });
+    const row = {
+        set: "fx", release: ID, version: "1.0.0", source_revision: SOURCE,
+        framework: { core_runtime: ">=1.25.0", source_revision: hex("c", 40), pair: "ui-111111111111" },
+        requires_sets: [], receipt_sha256: hex("4", 64), archive_sha256: hex("6", 64), published_on: "2026-11-06",
+    };
+    const indexPath = path.join(work, "index.json");
+    files(work, { "index.json": {
+        schema: "simai.framework.set-index", schema_version: 1, summary: "s",
+        sets: [{ id: "fx", title: "Fx", repository: "example/ui-fx", npm: "@simai-studio/fx", licence: { class: "framework", spdx: "Apache-2.0" }, docs: "https://fx.example.org/" }],
+        releases: [row],
+    } });
+
+    const published = run("python3", [PAIR_RECEIPT, "publish", "--repo", repo, "--receipt", path.join(work, "receipt.json"), "--index", indexPath],
+        { env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}` } });
+    assert.equal(published.status, 0, published.stderr);
+    const result = JSON.parse(published.stdout.trim().split("\n")[0]);
+    assert.equal(result.asset, "pair-receipt-ui-222222222222.json");
+
+    const bytes = fs.readFileSync(path.join(work, "receipt.json"), "utf8");
+    const uploads = fs.readFileSync(calls, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    assert.equal(uploads.length, 1, "one upload");
+    assert.deepEqual([uploads[0].args[0], uploads[0].args[1], uploads[0].args[2]], ["release", "upload", ID]);
+    assert.deepEqual(uploads[0].args.slice(4), ["--repo", "example/ui-fx"], "uploaded to the set's own repository");
+    assert.equal(uploads[0].name, "pair-receipt-ui-222222222222.json");
+    assert.equal(uploads[0].bytes, bytes, "the asset is the receipt, byte for byte");
+    assert.ok(!uploads[0].args.includes("--clobber"), "an asset is never replaced");
+
+    assert.equal(fs.readFileSync(path.join(repo, `contracts/pair-receipts/${ID}/ui-222222222222.json`), "utf8"), bytes);
+    const index = JSON.parse(fs.readFileSync(indexPath, "utf8"));
+    assert.deepEqual(index.releases[0].pairs, [{
+        pair: "ui-222222222222", source_revision: hex("f", 40), receipt_sha256: sha256(bytes), received_on: "2026-11-07",
+    }]);
+    assert.equal(run("python3", [INDEX, "check", "--index", indexPath]).status, 0);
+
+    // gh refusing (the asset already exists, no network): publish fails and the index is not touched.
+    files(bin, { gh: "#!/bin/sh\necho 'asset under the same filename already exists' >&2\nexit 1\n" });
+    fs.chmodSync(path.join(bin, "gh"), 0o755);
+    fs.rmSync(path.join(repo, `contracts/pair-receipts/${ID}/ui-222222222222.json`));
+    const before = fs.readFileSync(indexPath, "utf8");
+    const refused = run("python3", [PAIR_RECEIPT, "publish", "--repo", repo, "--receipt", path.join(work, "receipt.json"), "--index", indexPath],
+        { env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}` } });
+    assert.notEqual(refused.status, 0);
+    assert.equal(fs.readFileSync(indexPath, "utf8"), before, "the index is untouched when the upload fails");
+});
+
 test("publish lays the receipt once beside the release lock, without uploading when told", () => {
     const repo = fs.mkdtempSync(path.join(os.tmpdir(), "pair-publish-"));
     git(repo, "init", "-q", "-b", "main");

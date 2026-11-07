@@ -490,19 +490,23 @@ def publish(args):
     target = repo / RECEIPT_DIRECTORY / lock['id'] / f'{pair}.json'
     if target.exists():
         raise PairReceiptError(f'{target.relative_to(repo)} exists: a pair receipt is written once')
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(data)
+    # The upload first: a refused upload (the asset exists, no network) leaves
+    # neither the repository file nor the index row behind, so the step reruns.
     asset = f'pair-receipt-{pair}.json'
     if not args.no_upload:
         staged = Path(args.receipt).resolve().parent / asset
-        if staged.resolve() != Path(args.receipt).resolve():
+        if staged != Path(args.receipt).resolve():
             staged.write_bytes(data)
         subprocess.run(['gh', 'release', 'upload', lock['id'], str(staged), '--repo', lock['source']['repository']], check=True)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+    indexed = None
     if args.index:
-        subprocess.run([sys.executable, str(BUILDER_ROOT / 'scripts/set-index.py'), 'pair', '--index', str(args.index),
-                        '--receipt', str(target), '--received-on', receipt['created_on']], check=True)
+        indexed = json.loads(subprocess.run([sys.executable, str(BUILDER_ROOT / 'scripts/set-index.py'), 'pair', '--index', str(args.index),
+                                             '--receipt', str(target), '--received-on', receipt['created_on']],
+                                            check=True, capture_output=True, text=True).stdout)
     print(json.dumps({'laid': str(target.relative_to(repo)), 'asset': None if args.no_upload else asset,
-                      'index': str(args.index) if args.index else None, 'sha256': sha(data)}))
+                      'index': indexed, 'sha256': sha(data)}))
     print(f'Commit {target.relative_to(repo)} in {repo} ("Pair receipt: {lock["id"]} over {pair}") and push it with the release route.',
           file=sys.stderr)
 
