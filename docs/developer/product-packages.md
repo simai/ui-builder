@@ -137,11 +137,16 @@ an older one.
   builds: the runtime refuses a bundle of another ABI, and a second
   registration of the package with another ABI.
 - The report gets a `core` block (folder, rule, ABI, `id_prefix`, the
-  components that take it and the names they ask of each module,
+  components that take it, the names they ask of each module and, in
+  `module_users`, the components that import each module directly,
   `simai.framework.package-core-usage` v1), and the receipt copies it as
   `core` with the core's `script`. The core's rule is not a component: the
   receipt leaves it out of the set passport and package reference checks,
   and `framework.runtime` lists only the runtime's own modules.
+- Every module of the folder is in the core, and a page that shows one
+  component fetches all of it. Keep in the folder only what two or more
+  components share; a module one component alone imports (its
+  `module_users` lists one folder) belongs in that component's folder.
 
 ## The overlay
 

@@ -191,7 +191,7 @@ if (usage)
     // The package core: the folders whose bundles take it, and the names they
     // ask of each of its modules.
     const packageCore = core
-        ? { ...core, name: packageOptions.package, usage: {}, users: new Set() }
+        ? { ...core, moduleUsers: {}, name: packageOptions.package, usage: {}, users: new Set() }
         : null;
 
     function webpack(configurations)
@@ -246,6 +246,10 @@ if (usage)
                             users: [...packageCore.users].sort(),
                             modules: Object.fromEntries(Object.keys(packageCore.usage).sort()
                                 .map((id) => [id, [...packageCore.usage[id]].sort()])),
+                            // The components that import each module directly
+                            // (a module imported only by other core modules has none).
+                            module_users: Object.fromEntries(Object.keys(packageCore.moduleUsers).sort()
+                                .map((id) => [id, [...packageCore.moduleUsers[id]].sort()])),
                         }, null, 2)}\n`);
                     }
                     fs.writeFileSync(

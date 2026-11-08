@@ -517,6 +517,7 @@ def build_receipt(args):
             'script': f'{RUNTIME_PATH}/{core["folder"]}/js/{core["folder"]}.js',
             'users': core.get('users', []),
             'modules': core.get('modules', {}),
+            'module_users': core.get('module_users', {}),
         }} if core else {}),
         **({'set': set_block} if set_block else {}),
         'files': files,

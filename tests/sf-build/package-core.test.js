@@ -164,11 +164,13 @@ test("the package core is built once and the components take it from the runtime
             id_prefix: "acme/",
             users: ["kit-a", "kit-b"],
             modules: { "acme/format": ["format"], "acme/scale": ["linear"] },
+            module_users: { "acme/format": ["kit-b"], "acme/scale": ["kit-a", "kit-b"] },
         });
         const receipt = spawnSync("python3", [RECEIPT, "--report", path.join(workspace, "report.json")], { encoding: "utf8" });
         assert.equal(receipt.status, 0, receipt.stderr);
         const value = JSON.parse(fs.readFileSync(path.join(workspace, "package-receipt.json"), "utf8"));
         assert.equal(value.core.script, "smart/kit-core/js/kit-core.js");
+        assert.deepEqual(value.core.module_users, report.core.module_users);
         assert.ok(value.required_files.some((item) => item.path === "smart/kit-core/js/kit-core.js"));
         assert.deepEqual(value.framework.runtime.modules, {}, "the package's own ids are not the runtime's");
 

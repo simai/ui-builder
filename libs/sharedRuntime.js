@@ -299,7 +299,18 @@ function applySharedRuntimeExternals(configurations, { sourceRoot, usage = null,
                     callback();
                     return;
                 }
-                if (packageCore.users && entryKey.startsWith("smart/")) packageCore.users.add(entryKey.slice("smart/".length));
+                if (entryKey.startsWith("smart/"))
+                {
+                    const folder = entryKey.slice("smart/".length);
+                    if (packageCore.users) packageCore.users.add(folder);
+                    // Which components import each module directly: a module one
+                    // component alone takes is better kept in that component.
+                    if (packageCore.moduleUsers)
+                    {
+                        const id = `${packageCore.name}/${coreName}`;
+                        (packageCore.moduleUsers[id] = packageCore.moduleUsers[id] || new Set()).add(folder);
+                    }
+                }
                 callback(null, runtimeExternal(`${packageCore.name}/${coreName}`, `, ${packageCore.abi}`));
             },
         ];
