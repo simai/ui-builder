@@ -143,6 +143,14 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Fixed
 
+- A set's receipt accepts a relation to a rule of a set its passport requires
+  (2026-11-08, `scripts/write-package-receipt.py`). With `--registry`, the
+  rules of each `requires_sets` entry are `cl-` and the element without `sf-`
+  for every name the shared registry gives that set's owner; the page declares
+  the required set itself (`data-sf-sets`). Before, chat's `cl-chat-message`
+  relation to view's `cl-view-properties` was refused as neither a package
+  rule nor a rule of the free release. A relation to a set the passport does
+  not require, or one checked without a registry, is still refused.
 - Every host port's conformance kit ships whole. The source asset rule copied
   the kit's cases and manifest (`.json`) but not `kit/README.md`, so no
   consumer could recompute a shipped kit digest (`conformance.sha256`, the
