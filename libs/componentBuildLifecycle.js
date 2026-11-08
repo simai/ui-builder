@@ -26,6 +26,12 @@ const {
 const {
     createPostcssPlugins,
 } = require("./postcssPolicy");
+const {
+    assertPackageModulesSupported,
+    coreEntryKey,
+    validateCoreDeclaration,
+    writeCoreEntry,
+} = require("./packageCore");
 
 function deepFreeze(value)
 {
@@ -178,7 +184,11 @@ function packageProfile(pkg, label = `package ${pkg.name}`)
 {
     return Object.freeze({
         configurationPoliciesByTarget: SMART_CONFIGURATION_POLICIES,
-        entryFilter: Object.freeze(pkg.components.map(name => `smart/${name}`)),
+        // A package's shared core is built once, as an entry of its own.
+        entryFilter: Object.freeze([
+            ...pkg.components.map(name => `smart/${name}`),
+            ...(pkg.core ? [coreEntryKey(pkg.core)] : []),
+        ].sort()),
         label,
         packageRule: pkg,
         sassResourcesByTarget: SMART_SASS_RESOURCES,
@@ -212,9 +222,20 @@ function validatePackageDefinition(value)
         throw new TypeError("options.package.api must be a rule name cl-<folder>");
     }
 
+    // A package's shared core (package.json simai.core, libs/packageCore.js):
+    // a helper folder built once and taken by the components as package
+    // modules of the shared runtime.
+    const core = validateCoreDeclaration(value.core, "options.package.core");
+
+    if (core && value.components.includes(core.folder))
+    {
+        throw new TypeError(`options.package.core: ${core.folder} is a component, not a helper folder`);
+    }
+
     return Object.freeze({
         ...(value.api === undefined ? {} : { api: value.api }),
         components: Object.freeze([...value.components].sort()),
+        ...(core ? { core } : {}),
         name: value.name,
     });
 }
@@ -713,6 +734,50 @@ function runCompiler(compiler, run, close, reporter)
 
 async function runBuild(options, runtime, profile)
 {
+    const core = profile.packageRule && profile.packageRule.core;
+
+    if (!core)
+    {
+        return runBuildOnce(options, runtime, profile);
+    }
+
+    // The core's entry is generated into the tree being built (a package
+    // overlay) for the build's length, and removed after it.
+    let written;
+
+    try
+    {
+        if (!options || typeof options.sourceRoot !== "string" || !path.isAbsolute(options.sourceRoot))
+        {
+            throw new TypeError("sourceRoot must be a non-empty absolute path");
+        }
+        assertPackageModulesSupported(options.sourceRoot);
+        written = writeCoreEntry(options.sourceRoot, profile.packageRule.name, core);
+    }
+    catch (error)
+    {
+        reportDiagnostic(
+            usageReporter(runtime),
+            "plan",
+            error,
+            `${profile.label} core planning failed`,
+        );
+
+        return 2;
+    }
+
+    try
+    {
+        return await runBuildOnce(options, runtime, profile);
+    }
+    finally
+    {
+        written.remove();
+    }
+}
+
+async function runBuildOnce(options, runtime, profile)
+{
     let usage;
 
     try
@@ -900,7 +965,9 @@ async function runBuild(options, runtime, profile)
 
         if (profile.packageRule)
         {
-            materializePackageRule(definition.plan, profile.packageRule);
+            materializePackageRule(definition.plan, profile.packageRule, {
+                coreUsers: runtime && runtime.packageCoreUsers,
+            });
         }
 
         materializeGeneratedPackaging(definition.plan);

@@ -227,7 +227,7 @@ def resolve_release(ui_root, source_revision):
     return found[-1], [lock['compatibility_id'] for lock in found]
 
 
-def check_against_release(ui_root, release_lock, name, rules, folders, output_root, is_set=False):
+def check_against_release(ui_root, release_lock, name, rules, folders, output_root, is_set=False, core_rule=None):
     framework = release_lock['compatibility_id']
     release = release_lock['runtime_sources']['core']['revision']
     # Contracts are read where the release's own lock is: the bind commit that
@@ -244,8 +244,14 @@ def check_against_release(ui_root, release_lock, name, rules, folders, output_ro
         for tag in rule['tags']:
             if tag in free_tags:
                 problems.append(f'{rule_name}: <{tag}> is also an element of the free release {framework}')
+    if core_rule and exists(ui_root, release, f'distr/smart/{core_rule[3:]}'):
+        problems.append(f'{core_rule}: the free release {framework} ships distr/smart/{core_rule[3:]}')
     if problems:
         raise ReceiptError(f'the package and the free release {framework} disagree:\n  ' + '\n  '.join(problems))
+    # The package core's rule is the builder's, not a component: a reference
+    # names the components only, and their relation to the core is not a
+    # registry requirement.
+    rules = {key: rule for key, rule in rules.items() if key != core_rule}
 
     reference_path = f'distr/core/contracts/packages/{name}.package.json'
     result = {'path': reference_path, 'release': framework}
@@ -281,6 +287,7 @@ def check_against_release(ui_root, release_lock, name, rules, folders, output_ro
         requires = sorted({
             package_ids[relation['name']] if relation['name'] in package_ids else builder.relation_id(relation['name'], kinds)
             for relation in rule.get('relation', [])
+            if relation['name'] != core_rule
         })
         if requires != item['requires']:
             problems.append(f'{rule_name}: relations {requires}, the reference requires {item["requires"]}')
@@ -402,8 +409,22 @@ def build_receipt(args):
     folders = report['components']
     if registered != name:
         raise ReceiptError(f'{RULE_FILE} registers package {registered}, the build was {name}')
-    if sorted(rules) != sorted(f'cl-{folder}' for folder in folders):
-        raise ReceiptError(f'{RULE_FILE} registers {sorted(rules)}, the package holds {folders}')
+    # A package's shared core (ui-builder libs/packageCore.js): one more rule,
+    # the builder's, with a script and no tags; the components that take the
+    # core relate to it.
+    core = report.get('core')
+    core_rule = core['rule'] if core else None
+    if core:
+        if core_rule != f'cl-{core["folder"]}' or core['folder'] in folders:
+            raise ReceiptError(f'the report names the package core {core.get("folder")} with rule {core_rule}')
+        if rules.get(core_rule) != {'css': False, 'js': True, 'mode': 'smart', 'tags': [], 'type': 'smart'}:
+            raise ReceiptError(f'{RULE_FILE}: {core_rule} is not the rule of a package core: {rules.get(core_rule)}')
+        for user in core.get('users', []):
+            if not any(relation.get('name') == core_rule for relation in rules.get(f'cl-{user}', {}).get('relation', [])):
+                raise ReceiptError(f'cl-{user} takes the package core but does not relate to {core_rule}')
+    if sorted(rules) != sorted([*(f'cl-{folder}' for folder in folders), *([core_rule] if core_rule else [])]):
+        raise ReceiptError(f'{RULE_FILE} registers {sorted(rules)}, the package holds {folders}' + (f' and the core {core_rule}' if core_rule else ''))
+    component_rules = {key: rule for key, rule in rules.items() if key != core_rule}
     required = required_files(rules)
     present = {item['path'] for item in files}
     missing = [path for path in required if path not in present]
@@ -413,7 +434,7 @@ def build_receipt(args):
     source = report['package_source']
     licence = read_licence(source['root'], source['revision'], source['path'])
     is_set = bool(report.get('set'))
-    set_block = check_set(report, output_root, name, rules, licence, args.registry) if is_set else None
+    set_block = check_set(report, output_root, name, component_rules, licence, args.registry) if is_set else None
 
     archive = deterministic_tar(output_root, files)
     archive_path = Path(args.archive) if args.archive else workspace / f'package-{name}.tar'
@@ -435,7 +456,7 @@ def build_receipt(args):
             framework['release'] = release_lock['compatibility_id']
             if len(candidates) > 1:
                 framework['release_candidates'] = candidates
-            reference = check_against_release(args.ui, release_lock, name, rules, folders, output_root, is_set)
+            reference = check_against_release(args.ui, release_lock, name, rules, folders, output_root, is_set, core_rule)
             framework['runtime_check'] = check_runtime_against_release(args.ui, release_lock, report.get('runtime'))
 
     by_path = {item['path']: item for item in files}
@@ -488,6 +509,15 @@ def build_receipt(args):
             ],
         },
         'package_reference': reference,
+        **({'core': {
+            'folder': core['folder'],
+            'rule': core_rule,
+            'abi': core['abi'],
+            'id_prefix': core['id_prefix'],
+            'script': f'{RUNTIME_PATH}/{core["folder"]}/js/{core["folder"]}.js',
+            'users': core.get('users', []),
+            'modules': core.get('modules', {}),
+        }} if core else {}),
         **({'set': set_block} if set_block else {}),
         'files': files,
         'claims': {'production_ready': False},

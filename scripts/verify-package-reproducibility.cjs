@@ -34,6 +34,7 @@ const {
     materializePackageOverlay,
     resolvePackageSource,
 } = require("../libs/packageProduct");
+const { validateCoreDeclaration } = require("../libs/packageCore");
 
 const BUILDER_ROOT = path.resolve(__dirname, "..");
 const USAGE = [
@@ -136,11 +137,15 @@ function setOf(context, commit)
 {
     const passport = packageFile(context, commit, "set.json");
     const manifest = packageFile(context, commit, "package.json");
-    const api = manifest ? JSON.parse(manifest.toString("utf8"))?.simai?.api : undefined;
+    const simai = manifest ? JSON.parse(manifest.toString("utf8"))?.simai : undefined;
+    const api = simai?.api;
+    // A package's shared core (libs/packageCore.js): any package may declare
+    // one, a set or not.
+    const core = validateCoreDeclaration(simai?.core, "package.json simai.core");
 
     if (!passport)
     {
-        return { passport: null, api };
+        return { passport: null, api, core };
     }
 
     const value = JSON.parse(passport.toString("utf8"));
@@ -155,7 +160,7 @@ function setOf(context, commit)
         throw new Error(`set.json is the passport of set ${String(value.id)}, built as ${context.packageName}`);
     }
 
-    return { passport, api };
+    return { passport, api, core };
 }
 
 function runWave(waveName, context)
@@ -192,6 +197,7 @@ function runWave(waveName, context)
         "--package", context.packageName,
         "--components", overlay.components.join(","),
         ...(set.api ? ["--api", set.api] : []),
+        ...(set.core ? ["--core", `${set.core.folder}:${set.core.abi}`] : []),
         BUILDER_ROOT,
         path.join(overlayRoot, "src"),
         outputRoot,
@@ -221,7 +227,12 @@ function runWave(waveName, context)
     // The product is the package's own folders and the rule file, nothing
     // else, and a set's passport beside them.
     const top = fs.readdirSync(path.join(outputRoot, "smart")).sort();
-    const expected = [...overlay.components, path.basename(RULE_FILE), `${path.basename(RULE_FILE)}.gz`].sort();
+    const expected = [
+        ...overlay.components,
+        ...(set.core ? [set.core.folder] : []),
+        path.basename(RULE_FILE),
+        `${path.basename(RULE_FILE)}.gz`,
+    ].sort();
     const root = fs.readdirSync(outputRoot).sort().join();
 
     if (JSON.stringify(top) !== JSON.stringify(expected) || root !== (set.passport ? "set.json,smart" : "smart"))
@@ -234,11 +245,16 @@ function runWave(waveName, context)
     // (run-package-product-build.cjs); the receipt records them.
     const runtimePath = `${diagnosticsPath}.runtime.json`;
     const runtime = fs.existsSync(runtimePath) ? JSON.parse(fs.readFileSync(runtimePath, "utf8")) : null;
+    // The package core: its folder, rule, ABI, the components that take it and
+    // what they ask of it (run-package-product-build.cjs --core).
+    const corePath = `${diagnosticsPath}.core.json`;
+    const core = set.core ? JSON.parse(fs.readFileSync(corePath, "utf8")) : null;
 
     return {
         ...overlay,
         ...(set.passport ? { set: { passport: "set.json", sha256: sha256(set.passport), api: set.api || null } } : {}),
         runtime,
+        ...(core ? { core } : {}),
         files,
         files_count: files.length,
         manifest_sha256: sha256(`${JSON.stringify(files)}\n`),
@@ -378,6 +394,7 @@ function main()
         report.components = first.components;
         if (first.set) report.set = first.set;
         report.runtime = first.runtime;
+        if (first.core) report.core = first.core;
         report.output = path.join("wave-1", "output", "package", context.packageName).split(path.sep).join("/");
         report.products = {
             package: {
