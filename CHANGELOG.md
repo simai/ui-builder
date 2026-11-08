@@ -6,6 +6,16 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Added
 
+- Set release assets (2026-11-08): the set release route lays
+  `package-<set>.tar` beside `package-<set>-<12>.tar`, the same bytes (the
+  name Larena fetches, as `package-pro.tar` on a Pro release), with
+  `package-<set>.tar.sha256`, the receipt and the stamped passport
+  (`scripts/package-release-assets.py prepare`, run by
+  `publish-package-release.sh` into `<work>/assets`).
+  `package-release-assets.py check` (a folder or a published release) refuses
+  two archives whose sha256 differ and an archive that is not the receipt's or
+  the lock's; `scripts/upload-package-release.sh` creates the release from the
+  checked assets and checks them again after downloading them back.
 - A package's shared core (2026-11-08, `libs/packageCore.js`): a package
   declares a helper folder as its core in `package.json`
   (`simai.core: {folder, abi}`); the package build builds it once as

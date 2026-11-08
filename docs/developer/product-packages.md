@@ -365,6 +365,20 @@ newest release's build. The passport stamped with the release block
 (`--set-out`) is a release asset; the `set.json` in the repository stays the
 bytes the receipt hashed.
 
+The route then lays the GitHub release assets into `<work>/assets`
+(`scripts/package-release-assets.py prepare`): `package-<set>-<12>.tar` and
+`package-<set>.tar`, the same bytes -- consumers fetch the second name, as
+Larena fetches `package-pro.tar` from a Pro release -- with
+`package-<set>.tar.sha256`, `package-receipt.json` and `set-<set>-<12>.json`.
+`package-release-assets.py check` (`--dir`, or `--github <owner/repo>` to read
+a published release) refuses two archives that are not the same bytes, a
+`.sha256` that does not name the archive, and an archive that is not the
+receipt's (or, with `--lock`, the lock's) `archive_sha256`.
+`scripts/upload-package-release.sh --assets <work>/assets --release <set>-<12>
+--github <owner/repo>` creates the release from them after review, refuses a
+tag that already has a release, and checks every asset again after
+downloading it back; `--dry-run` prints the `gh` command instead.
+
 `scripts/set-index.py add` writes the release's row into the one
 compatibility index (`simai.framework.set-index` v1, published as
 `@simai-studio/sets`, `index.json`), from the stamped passport and the lock;

@@ -27,7 +27,13 @@
 #      stamped passport (a release asset, in --work), and runs the release gate
 #      (bind-package-release.py lock, check). Red: the bind is left uncommitted.
 #   4. Commits "Bind the <set> release <set>-<12>".
-#   5. With --index, adds the release row to the compatibility index
+#   5. Lays the GitHub release assets into <work>/assets and checks them
+#      (package-release-assets.py prepare): package-<set>-<12>.tar and
+#      package-<set>.tar -- the same bytes; consumers fetch the second name,
+#      as they fetch package-pro.tar from a Pro release -- its .sha256, the
+#      receipt and set-<set>-<12>.json. scripts/upload-package-release.sh
+#      creates the release from them.
+#   6. With --index, adds the release row to the compatibility index
 #      (set-index.py add); the index is not committed here -- it lives in its
 #      own package, @simai-studio/sets.
 #
@@ -123,6 +129,11 @@ step 'the bind commit'
 git -C "$REPO" add contracts/releases/"$ID".lock.json
 commit "$REPO" "Bind the $NAME release $ID" "$SUBJECT. Version $VERSION, over ui-source ${SOURCE_REVISION:0:12}."
 
+step 'the release assets'
+python3 "$BUILDER_ROOT/scripts/package-release-assets.py" prepare --work "$WORK" --release "$ID" \
+    --out "$WORK/assets" --lock "$REPO/contracts/releases/$ID.lock.json" \
+    || fail "the release assets of $ID disagree (the bind is committed; nothing was pushed)"
+
 if [ -n "$INDEX" ]; then
     step 'the compatibility index row'
     python3 "$BUILDER_ROOT/scripts/set-index.py" add --index "$INDEX" --passport "$WORK/set.json" \
@@ -132,4 +143,7 @@ fi
 printf '\nRELEASE %s version=%s build=%s bind=%s source=%s builder=%s receipt=%s passport=%s\n' \
     "$ID" "$VERSION" "${BUILD:0:12}" "$(git -C "$REPO" rev-parse --short=12 HEAD)" "${SOURCE_REVISION:0:12}" \
     "${BUILDER_REVISION:0:12}" "$WORK/package-receipt.json" "$WORK/set.json"
-printf 'Nothing was pushed.\n'
+printf 'ASSETS %s\n' "$WORK/assets"
+printf 'Nothing was pushed. After review: scripts/upload-package-release.sh --assets %q --release %s --github <owner/repo>\n' \
+    "$WORK/assets" "$ID"
+

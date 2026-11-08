@@ -20,6 +20,8 @@ const RECEIPT = path.join(SCRIPTS, "write-package-receipt.py");
 const BIND = path.join(SCRIPTS, "bind-package-release.py");
 const PUBLISH = path.join(SCRIPTS, "publish-package-release.sh");
 const INDEX = path.join(SCRIPTS, "set-index.py");
+const ASSETS = path.join(SCRIPTS, "package-release-assets.py");
+const UPLOAD = path.join(SCRIPTS, "upload-package-release.sh");
 const SOURCE_REVISION = "a".repeat(40);
 const RULES = {
     "cl-glow": { css: true, js: true, mode: "smart", tags: ["sf-glow"], type: "smart" },
@@ -256,12 +258,64 @@ test("the generic route lays the build, binds the lock, passes its gate and neve
     const gate = run("python3", [BIND, "check", "--repo", repo]);
     assert.equal(gate.status, 0, gate.stderr);
 
+    // The release assets: the archive under the release's name and under the
+    // set's name alone, the same bytes, the receipt's and the lock's archive.
+    const assets = path.join(work, "assets");
+    assert.match(published.stdout, new RegExp(`ASSETS ${assets.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}`, "u"));
+    assert.deepEqual(fs.readdirSync(assets).sort(), [
+        `package-${id}.tar`, "package-fx.tar", "package-fx.tar.sha256", "package-receipt.json", `set-${id}.json`,
+    ]);
+    const archive = sha256(fs.readFileSync(path.join(assets, "package-fx.tar")));
+    assert.equal(sha256(fs.readFileSync(path.join(assets, `package-${id}.tar`))), archive, "the two archives are the same bytes");
+    assert.equal(fs.readFileSync(path.join(assets, "package-fx.tar.sha256"), "utf8"), `${archive}  package-fx.tar\n`);
+    assert.equal(lock.output.archive_sha256, archive);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(assets, `set-${id}.json`), "utf8")), stamped);
+    const lockPath = path.join(repo, `contracts/releases/${id}.lock.json`);
+    const checked = run("python3", [ASSETS, "check", "--dir", assets, "--release", id, "--lock", lockPath]);
+    assert.equal(checked.status, 0, checked.stderr);
+    assert.match(checked.stdout, new RegExp(`ASSETS ${id} archive_sha256=${archive}`, "u"));
+    const dry = run("bash", [UPLOAD, "--assets", assets, "--release", id, "--github", "example/ui-fx", "--lock", lockPath, "--dry-run"]);
+    assert.equal(dry.status, 0, dry.stderr);
+    assert.match(dry.stdout, new RegExp(`would run: gh release create ${id} -R example/ui-fx --title fx\\\\ 1\\.0\\.0\\\\ \\\\\\(${id}\\\\\\)`, "u"));
+    for (const name of [`package-${id}.tar`, "package-fx.tar", "package-fx.tar.sha256", "package-receipt.json", `set-${id}.json`]) {
+        assert.ok(dry.stdout.includes(path.join(assets, name)), `the release carries ${name}`);
+    }
+
     // A byte changed in the release output after the bind reds the gate.
     fs.writeFileSync(path.join(repo, "package/dist/smart/rule.js"), "// changed\n");
     commit(repo, {}, "tamper");
     const red = run("python3", [BIND, "check", "--repo", repo]);
     assert.notEqual(red.status, 0);
     assert.match(red.stderr, /package\/dist at HEAD is not the build of fx-/u);
+});
+
+test("the release assets refuse two archives that are not the same bytes", () => {
+    const { repo, revision, workspace } = setRelease();
+    const work = path.join(workspace, "release");
+    const published = run("bash", [PUBLISH, "--report", path.join(workspace, "report.json"), "--repo", repo,
+        "--version", "1.0.0", "--subject", "s", "--work", work], {
+        env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.invalid", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.invalid" },
+    });
+    assert.equal(published.status, 0, published.stderr);
+    const id = `fx-${revision.slice(0, 12)}`;
+    const assets = path.join(work, "assets");
+    const check = () => run("python3", [ASSETS, "check", "--dir", assets, "--release", id]);
+    assert.equal(check().status, 0);
+
+    const versioned = path.join(assets, `package-${id}.tar`);
+    const original = fs.readFileSync(versioned);
+    fs.appendFileSync(versioned, "x");
+    assert.match(check().stderr, /package-fx\.tar \([0-9a-f]{64}\) and package-fx-[0-9a-f]{12}\.tar \([0-9a-f]{64}\) are not the same bytes/u);
+    const upload = run("bash", [UPLOAD, "--assets", assets, "--release", id, "--github", "example/ui-fx", "--dry-run"]);
+    assert.notEqual(upload.status, 0, "nothing is sent over assets that disagree");
+    assert.match(upload.stderr, /UPLOAD_FAILED/u);
+    fs.writeFileSync(versioned, original);
+
+    fs.rmSync(path.join(assets, "package-fx.tar"));
+    assert.match(check().stderr, /missing assets package-fx\.tar\b/u);
+    fs.writeFileSync(path.join(assets, "package-fx.tar"), original);
+    fs.writeFileSync(path.join(assets, "package-fx.tar.sha256"), `${"0".repeat(64)}  package-fx.tar\n`);
+    assert.match(check().stderr, /package-fx\.tar\.sha256 reads/u);
 });
 
 test("the route refuses main and a dirty checkout", () => {
