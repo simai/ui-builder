@@ -9,11 +9,18 @@
 // and <out>/smart/rule.js, which registers the package `<name>`.
 //
 // usage: run-package-product-build.cjs --package <name> --components <list> [--api <rule>]
+//            [--core <folder>:<abi>]
 //            <builderRoot> <sourceRoot> <outputRoot> <diagnosticsPath>
 //
 // --api names the rule whose bundle gives a component set's exports
 // (standard simai.component-set; the package folder's package.json simai.api):
 // the rule file then registers it as `api`.
+//
+// --core names the package's shared core (package.json simai.core,
+// libs/packageCore.js): the helper folder built once as smart/<folder>, whose
+// modules the components take from the page's runtime as
+// SF.runtimeModule("<name>/<module>", <abi>). What the components asked of it
+// is written beside the diagnostics (<diagnostics>.core.json).
 
 const fs = require("node:fs");
 const path = require("node:path");
@@ -25,6 +32,7 @@ const {
 const { applySharedRuntimeExternals, runtimeUsageReport } = require("../libs/sharedRuntime");
 const { applyComponentManifestEmbed } = require("../libs/componentManifestEmbed");
 const { compatibilityFromEnvironment } = require("../libs/legacyRuntimeCompatibility");
+const { coreRuleName, parseCoreOption } = require("../libs/packageCore");
 
 const ARGUMENT_NAMES = Object.freeze([
     "builderRoot",
@@ -32,7 +40,7 @@ const ARGUMENT_NAMES = Object.freeze([
     "outputRoot",
     "diagnosticsPath",
 ]);
-const OPTION_NAMES = Object.freeze(["--package", "--components", "--api"]);
+const OPTION_NAMES = Object.freeze(["--package", "--components", "--api", "--core"]);
 
 function splitOptions(received)
 {
@@ -126,6 +134,21 @@ if (usage && (typeof packageOptions.package !== "string" || typeof packageOption
     usage = null;
 }
 
+let core = null;
+
+if (usage && packageOptions.core !== undefined)
+{
+    try
+    {
+        core = parseCoreOption(packageOptions.core);
+    }
+    catch (error)
+    {
+        reportInvocationFailure("INVALID_CORE", error.message, { received: packageOptions.core });
+        usage = null;
+    }
+}
+
 if (usage)
 {
     const {
@@ -165,6 +188,11 @@ if (usage)
     // The shared runtime modules and names the bundles ask for: written beside
     // the diagnostics (<diagnostics>.runtime.json) for the package receipt.
     const runtimeUsage = {};
+    // The package core: the folders whose bundles take it, and the names they
+    // ask of each of its modules.
+    const packageCore = core
+        ? { ...core, moduleUsers: {}, name: packageOptions.package, usage: {}, users: new Set() }
+        : null;
 
     function webpack(configurations)
     {
@@ -176,7 +204,7 @@ if (usage)
         });
         // Smart elements take lit and smart-base from the shared runtime Core
         // loads once per page, instead of a copy each.
-        applySharedRuntimeExternals(configurations, { sourceRoot, usage: runtimeUsage });
+        applySharedRuntimeExternals(configurations, { sourceRoot, usage: runtimeUsage, packageCore });
         // Each element embeds only the keys of its component.json the runtime reads.
         applyComponentManifestEmbed(configurations, { sourceRoot });
         const compiler = webpackImplementation(configurations);
@@ -206,6 +234,24 @@ if (usage)
                         `${diagnosticsPath}.runtime.json`,
                         `${JSON.stringify(runtimeUsageReport(runtimeUsage, sourceRoot), null, 2)}\n`,
                     );
+                    if (packageCore)
+                    {
+                        fs.writeFileSync(`${diagnosticsPath}.core.json`, `${JSON.stringify({
+                            schema: "simai.framework.package-core-usage",
+                            version: 1,
+                            folder: packageCore.folder,
+                            rule: coreRuleName(packageCore),
+                            abi: packageCore.abi,
+                            id_prefix: `${packageCore.name}/`,
+                            users: [...packageCore.users].sort(),
+                            modules: Object.fromEntries(Object.keys(packageCore.usage).sort()
+                                .map((id) => [id, [...packageCore.usage[id]].sort()])),
+                            // The components that import each module directly
+                            // (a module imported only by other core modules has none).
+                            module_users: Object.fromEntries(Object.keys(packageCore.moduleUsers).sort()
+                                .map((id) => [id, [...packageCore.moduleUsers[id]].sort()])),
+                        }, null, 2)}\n`);
+                    }
                     fs.writeFileSync(
                         `${diagnosticsPath}.stats.json`,
                         `${JSON.stringify(details, null, 2)}\n`,
@@ -232,6 +278,7 @@ if (usage)
         {
             diagnostics.push(diagnostic);
         },
+        ...(packageCore ? { packageCoreUsers: packageCore.users } : {}),
         webpack,
     };
 
@@ -240,6 +287,7 @@ if (usage)
         package: {
             ...(packageOptions.api ? { api: packageOptions.api } : {}),
             components: packageOptions.components.split(","),
+            ...(core ? { core } : {}),
             name: packageOptions.package,
         },
         sourceRoot,

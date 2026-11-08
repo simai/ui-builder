@@ -96,6 +96,58 @@ is still accepted, so the four components can move without touching their lock.
   from its own bundle). An import puts a second copy of the element, and of
   its sheet, in the importer's bundle.
 
+## A package's shared core
+
+Code every component of a package draws with (a chart set's scales, formats,
+data readers) lives in a helper folder, `src/smart/<folder>/` without a
+`rule.js`. Imported the ordinary way, every component's bundle carries its
+own copy of it. Declared as the package's **core**, it is built once:
+
+```json
+{
+  "license": "...",
+  "simai": {"core": {"folder": "chart-core", "abi": 1}}
+}
+```
+
+(`package.json` of the package folder; `libs/packageCore.js`.) The pinned
+ui-source must have package modules (`core.runtime` 1.38.0,
+`core/contracts/shared-runtime.v1.json` `package_modules`); the build refuses
+an older one.
+
+- The build writes an entry for the folder for the length of the build (it is
+  not left in the overlay) and builds it as `smart/<folder>/js/<folder>.js`:
+  it registers every `.js`/`.mjs` file of the folder with the page's runtime,
+  `SF.runtimeModule.register("<package>", <abi>, {"<module>": namespace})`.
+  A module's name is its path inside the folder without the extension
+  (`chart-core/scale.js` is `scale`, the id `chart/scale`).
+- In every component's bundle an import that resolves into the folder becomes
+  `SF.runtimeModule("<package>/<module>", <abi>)`, as a Core runtime module
+  does. A named import the module does not export fails the build, and so does
+  a module that exports a live binding (`export let`, `export var`): the
+  runtime hands a frozen copy of each namespace.
+- `smart/rule.js` gets the core's rule, `cl-<folder>`
+  (`{css: false, js: true, mode: "smart", tags: [], type: "smart"}`). Every
+  component whose bundle takes the core must relate to it in its own
+  `rule.js` (`relation: [{name: "cl-<folder>"}]`), or the build fails: the
+  Loader then fetches the core once, before the first component that needs
+  it runs.
+- The ABI is the version of the core's exports. The components are always
+  built with their core, so it only guards a page that mixes bundles of two
+  builds: the runtime refuses a bundle of another ABI, and a second
+  registration of the package with another ABI.
+- The report gets a `core` block (folder, rule, ABI, `id_prefix`, the
+  components that take it, the names they ask of each module and, in
+  `module_users`, the components that import each module directly,
+  `simai.framework.package-core-usage` v1), and the receipt copies it as
+  `core` with the core's `script`. The core's rule is not a component: the
+  receipt leaves it out of the set passport and package reference checks,
+  and `framework.runtime` lists only the runtime's own modules.
+- Every module of the folder is in the core, and a page that shows one
+  component fetches all of it. Keep in the folder only what two or more
+  components share; a module one component alone imports (its
+  `module_users` lists one folder) belongs in that component's folder.
+
 ## The overlay
 
 ui-builder lays out ui-source at the pinned revision and the package's `src/`,

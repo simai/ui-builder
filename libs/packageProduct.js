@@ -26,6 +26,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const { spawnSync } = require("node:child_process");
+const { assertCoreRelations, coreRule, coreRuleName } = require("./packageCore");
 
 const PACKAGE_NAME = /^[a-z][a-z0-9-]*$/u;
 const COMPONENT_FOLDER = /^[a-z][a-z0-9-]*$/u;
@@ -454,15 +455,43 @@ function readPackageRuleFile(source)
 }
 
 /**
- * Write <outputRoot>/smart/rule.js for a package. `pkg` is
- * {name, components, header?, api?}.
+ * The rules of a package, with its shared core's rule when it has one
+ * (libs/packageCore.js): `cl-<folder>`, a script and no tags, which every
+ * component importing the core must relate to (`coreUsers`, the folders whose
+ * bundles took a core module as an external).
  */
-function materializePackageRule(plan, pkg)
+function packageRulesWithCore(sourceRoot, pkg, coreUsers)
+{
+    const rules = collectPackageRules(sourceRoot, pkg.components);
+
+    if (!pkg.core)
+    {
+        return rules;
+    }
+
+    const name = coreRuleName(pkg.core);
+
+    if (rules[name])
+    {
+        throw new Error(`the package core ${pkg.core.folder} and a component share the rule ${name}`);
+    }
+
+    assertCoreRelations(rules, pkg.core, coreUsers || []);
+    const all = { ...rules, [name]: normalizeRuleValue(coreRule(), `rule ${name}`) };
+
+    return Object.fromEntries(Object.keys(all).sort(compareCodeUnits).map(key => [key, all[key]]));
+}
+
+/**
+ * Write <outputRoot>/smart/rule.js for a package. `pkg` is
+ * {name, components, header?, api?, core?}.
+ */
+function materializePackageRule(plan, pkg, { coreUsers } = {})
 {
     const destination = path.resolve(plan.outputRoot, RULE_FILE);
     const payload = renderPackageRuleFile(
         pkg.name,
-        collectPackageRules(plan.sourceRoot, pkg.components),
+        packageRulesWithCore(plan.sourceRoot, pkg, coreUsers),
         pkg.header,
         pkg.api === undefined ? {} : { api: pkg.api },
     );
@@ -493,6 +522,7 @@ module.exports = {
     materializePackageOverlay,
     materializePackageRule,
     packageComponents,
+    packageRulesWithCore,
     readPackageRuleFile,
     renderPackageRuleFile,
     resolvePackageSource,

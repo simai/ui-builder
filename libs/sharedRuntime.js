@@ -12,6 +12,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { coreEntryKey, coreModuleFile, coreModuleFor } = require("./packageCore");
 
 const BARE_MODULES = Object.freeze([
     "lit",
@@ -155,31 +156,33 @@ function runtimeExports(id, sourceRoot)
 {
     const relative = CORE_MODULES[id];
     if (!relative) return null;
-    const key = `${sourceRoot}\0${id}`;
-    if (exportCache.has(key)) return exportCache.get(key);
     const base = path.join(sourceRoot, relative);
     const file = [base, `${base}.js`, `${base}.mjs`].find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile());
-    let names = null;
-    if (file)
+    return file ? exportsOfFile(file) : null;
+}
+
+// The names a module file exports; null when it re-exports a whole module.
+function exportsOfFile(file)
+{
+    const key = file;
+    if (exportCache.has(key)) return exportCache.get(key);
+    const acorn = require("acorn");
+    const program = acorn.parse(fs.readFileSync(file, "utf8"), { ecmaVersion: "latest", sourceType: "module" });
+    let names = new Set();
+    for (const node of program.body)
     {
-        const acorn = require("acorn");
-        const program = acorn.parse(fs.readFileSync(file, "utf8"), { ecmaVersion: "latest", sourceType: "module" });
-        names = new Set();
-        for (const node of program.body)
+        if (node.type === "ExportAllDeclaration")
         {
-            if (node.type === "ExportAllDeclaration")
-            {
-                if (!node.exported) { names = null; break; }
-                names.add(node.exported.name ?? node.exported.value);
-            }
-            else if (node.type === "ExportDefaultDeclaration") names.add("default");
-            else if (node.type === "ExportNamedDeclaration")
-            {
-                const declaration = node.declaration;
-                if (declaration?.id) names.add(declaration.id.name);
-                for (const item of declaration?.declarations || []) if (item.id.type === "Identifier") names.add(item.id.name);
-                for (const specifier of node.specifiers || []) names.add(specifier.exported.name ?? specifier.exported.value);
-            }
+            if (!node.exported) { names = null; break; }
+            names.add(node.exported.name ?? node.exported.value);
+        }
+        else if (node.type === "ExportDefaultDeclaration") names.add("default");
+        else if (node.type === "ExportNamedDeclaration")
+        {
+            const declaration = node.declaration;
+            if (declaration?.id) names.add(declaration.id.name);
+            for (const item of declaration?.declarations || []) if (item.id.type === "Identifier") names.add(item.id.name);
+            for (const specifier of node.specifiers || []) names.add(specifier.exported.name ?? specifier.exported.value);
         }
     }
     exportCache.set(key, names);
@@ -193,9 +196,13 @@ function runtimeExports(id, sourceRoot)
 // and fails the build on a name it lacks.
 class RuntimeExportsCheck
 {
-    constructor(sourceRoot, usage = null)
+    constructor(sourceRoot, usage = null, packageCore = null)
     {
         this.sourceRoot = sourceRoot;
+        // A package's shared core (libs/packageCore.js): its ids are checked
+        // against the core folder's own files and reported apart from the
+        // runtime's, which a receipt compares with the release.
+        this.packageCore = packageCore;
         // id -> Set of the names the build's bundles import from it ("*" for a
         // namespace or side-effect import): what a package receipt records.
         this.usage = usage;
@@ -213,20 +220,32 @@ class RuntimeExportsCheck
                         const target = compilation.moduleGraph.getModule(dependency);
                         const match = typeof target?.request === "string" && target.request.match(/runtimeModule\("([^"]+)"/u);
                         if (!match) continue;
-                        if (this.usage)
+                        const core = this.packageCore;
+                        const coreName = core && match[1].startsWith(`${core.name}/`) ? match[1].slice(core.name.length + 1) : null;
+                        const usage = coreName === null ? this.usage : core.usage;
+                        if (usage)
                         {
-                            if (!this.usage[match[1]]) this.usage[match[1]] = new Set();
+                            if (!usage[match[1]]) usage[match[1]] = new Set();
                             const ids = Array.isArray(dependency.ids) && dependency.ids.length ? dependency.ids : null;
-                            if (ids) this.usage[match[1]].add(ids[0]);
-                            else if (dependency.type !== "harmony side effect evaluation") this.usage[match[1]].add("*");
+                            if (ids) usage[match[1]].add(ids[0]);
+                            else if (dependency.type !== "harmony side effect evaluation") usage[match[1]].add("*");
                         }
                         if (!Array.isArray(dependency.ids) || !dependency.ids.length) continue;
-                        if (!CORE_MODULES[match[1]]) continue;
-                        const names = runtimeExports(match[1], this.sourceRoot);
+                        let names;
+                        if (coreName !== null)
+                        {
+                            const file = coreModuleFile(this.sourceRoot, core, coreName);
+                            names = file ? exportsOfFile(file) : new Set();
+                        }
+                        else
+                        {
+                            if (!CORE_MODULES[match[1]]) continue;
+                            names = runtimeExports(match[1], this.sourceRoot);
+                        }
                         const name = dependency.ids[0];
                         if (!names || names.has(name)) continue;
                         const error = new WebpackError(
-                            `${module.resource || module.identifier()} imports "${name}" from the runtime module "${match[1]}", which does not export it`,
+                            `${module.resource || module.identifier()} imports "${name}" from the ${coreName === null ? "runtime" : "package core"} module "${match[1]}", which does not export it`,
                         );
                         error.module = module;
                         compilation.errors.push(error);
@@ -237,7 +256,12 @@ class RuntimeExportsCheck
     }
 }
 
-function applySharedRuntimeExternals(configurations, { sourceRoot, usage = null })
+// `packageCore` ({name, folder, abi, users?, usage?}): the package's shared
+// core (libs/packageCore.js). Its own bundle (entry smart/<folder>) keeps its
+// modules; in every other bundle an import from the folder becomes
+// `SF.runtimeModule("<name>/<module>", <abi>)`, and the bundle's folder is
+// added to `users`.
+function applySharedRuntimeExternals(configurations, { sourceRoot, usage = null, packageCore = null })
 {
     if (!Array.isArray(configurations))
     {
@@ -257,24 +281,50 @@ function applySharedRuntimeExternals(configurations, { sourceRoot, usage = null 
         configuration.module = configuration.module || {};
         configuration.module.parser = configuration.module.parser || {};
         configuration.module.parser.javascript = { ...(configuration.module.parser.javascript || {}), exportsPresence: "error" };
-        configuration.plugins = [...(configuration.plugins || []), new RuntimeExportsCheck(root, usage)];
+        configuration.plugins = [...(configuration.plugins || []), new RuntimeExportsCheck(root, usage, packageCore)];
+        const entryKey = Object.keys(configuration.entry || {})[0] || "";
+        const ownCore = packageCore && entryKey === coreEntryKey(packageCore);
         configuration.externals = [
             ({ context, request, contextInfo }, callback) => {
-                const id = runtimeIdFor({ context, request, issuer: contextInfo && contextInfo.issuer }, root);
-                if (!id)
+                const issuer = contextInfo && contextInfo.issuer;
+                const id = runtimeIdFor({ context, request, issuer }, root);
+                if (id)
+                {
+                    callback(null, runtimeExternal(id, abi));
+                    return;
+                }
+                const coreName = packageCore && !ownCore ? coreModuleFor({ context, request, issuer }, root, packageCore) : null;
+                if (coreName === null)
                 {
                     callback();
                     return;
                 }
-                // Core's lookup when Core is on the page; otherwise the runtime
-                // script's, once it has run (a page that includes it by hand).
-                const key = JSON.stringify(id);
-                callback(null, `(globalThis.SF && globalThis.SF.runtimeModule ? globalThis.SF.runtimeModule(${key}${abi}) : new Promise((resolve, reject) => globalThis.addEventListener("sf-runtime-ready", () => globalThis.SF.runtimeModule(${key}${abi}).then(resolve, reject), { once: true })))`);
+                if (entryKey.startsWith("smart/"))
+                {
+                    const folder = entryKey.slice("smart/".length);
+                    if (packageCore.users) packageCore.users.add(folder);
+                    // Which components import each module directly: a module one
+                    // component alone takes is better kept in that component.
+                    if (packageCore.moduleUsers)
+                    {
+                        const id = `${packageCore.name}/${coreName}`;
+                        (packageCore.moduleUsers[id] = packageCore.moduleUsers[id] || new Set()).add(folder);
+                    }
+                }
+                callback(null, runtimeExternal(`${packageCore.name}/${coreName}`, `, ${packageCore.abi}`));
             },
         ];
     }
 
     return configurations;
+}
+
+// Core's lookup when Core is on the page; otherwise the runtime script's, once
+// it has run (a page that includes it by hand).
+function runtimeExternal(id, abi)
+{
+    const key = JSON.stringify(id);
+    return `(globalThis.SF && globalThis.SF.runtimeModule ? globalThis.SF.runtimeModule(${key}${abi}) : new Promise((resolve, reject) => globalThis.addEventListener("sf-runtime-ready", () => globalThis.SF.runtimeModule(${key}${abi}).then(resolve, reject), { once: true })))`;
 }
 
 // The names each runtime module is asked for, sorted, for a receipt.

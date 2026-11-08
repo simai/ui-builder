@@ -6,6 +6,17 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Added
 
+- A package's shared core (2026-11-08, `libs/packageCore.js`): a package
+  declares a helper folder as its core in `package.json`
+  (`simai.core: {folder, abi}`); the package build builds it once as
+  `smart/<folder>/js/<folder>.js`, which registers its modules with the
+  page's runtime (`SF.runtimeModule.register`, ui-source core.runtime
+  1.38.0), turns every component's import from the folder into
+  `SF.runtimeModule("<package>/<module>", <abi>)`, writes the core's tagless
+  rule `cl-<folder>` into `smart/rule.js` and refuses a component that takes
+  the core without relating to that rule. The runner takes `--core
+  <folder>:<abi>`; the report and the receipt carry a `core` block. A pinned
+  ui-source without package modules is refused.
 - The element layer joins the shared Smart runtime (2026-10-28, stand 25):
   `libs/sharedRuntime.js` `CORE_MODULES` adds `element-manifest`, `aliases`,
   `alias-table`, `host-port`, `deprecations`, `page-actions`, `layer-stack`,
