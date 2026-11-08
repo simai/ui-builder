@@ -85,7 +85,7 @@ const passport = (extra = {}) => ({
 });
 
 /** A set repository on a release branch, and the workspace a build of it leaves. */
-function setRelease({ passportValue = passport(), api = "cl-glow" } = {})
+function setRelease({ passportValue = passport(), api = "cl-glow", rules = RULES } = {})
 {
     const repo = fs.mkdtempSync(path.join(os.tmpdir(), "set-repo-"));
     git(repo, "init", "-q", "-b", "main");
@@ -102,7 +102,7 @@ function setRelease({ passportValue = passport(), api = "cl-glow" } = {})
     writeFile(output, "set.json", passportBytes);
     writeFile(output, "smart/glow/js/glow.js", "/* glow */\n");
     writeFile(output, "smart/glow/css/glow.css", "sf-glow{display:block}\n");
-    writeFile(output, "smart/rule.js", renderPackageRuleFile("fx", RULES, undefined, { api }));
+    writeFile(output, "smart/rule.js", renderPackageRuleFile("fx", rules, undefined, { api }));
     const files = filesUnder(output);
     writeFile(workspace, "report.json", `${JSON.stringify({
         builder: { clean: true, revision: "b".repeat(40), root: "/builder" },
@@ -163,6 +163,62 @@ test("the receipt of a set carries a set block and refuses a passport that disag
     const disagreeing = run("python3", [RECEIPT, "--report", path.join(good.workspace, "report.json"), "--registry", registry]);
     assert.notEqual(disagreeing.status, 0);
     assert.match(disagreeing.stderr, /the registry gives \['glow', 'spark'\]/u);
+});
+
+/** A ui checkout with one free release built from SOURCE_REVISION. */
+function freeRelease()
+{
+    const ui = fs.mkdtempSync(path.join(os.tmpdir(), "set-ui-"));
+    git(ui, "init", "-q", "-b", "main");
+    const build = commit(ui, {
+        "distr/rule/rule.json": `${JSON.stringify([{ name: "cl-buttons", type: "smart", tags: ["sf-button"] }])}\n`,
+    }, "build");
+    const id = `ui-${build.slice(0, 12)}`;
+    commit(ui, {
+        [`contracts/releases/${id}.lock.json`]: `${JSON.stringify({
+            schema_version: 2,
+            compatibility_id: id,
+            runtime_sources: { core: { revision: build } },
+            build_inputs: { source: { commit: SOURCE_REVISION } },
+        })}\n`,
+    }, "bind");
+    return { id, ui };
+}
+
+test("a set's relation to a rule of a set its passport requires is met by the registry's names for that set", () => {
+    const { ui } = freeRelease();
+    const rules = { "cl-glow": { ...RULES["cl-glow"], relation: [{ name: "cl-buttons" }, { name: "cl-view-properties", lazy: true }] } };
+    const component = { ...passport().components[0], requires: ["cl-buttons", "cl-view-properties"] };
+    const registryOwners = [
+        { id: "fx", kind: "set", repository: "example/ui-fx", families: ["glow"], names: [{ element: "sf-glow", status: "released" }] },
+        { id: "view", kind: "set", repository: "simai/ui-view", families: ["view"], names: [{ element: "sf-view-properties", status: "released" }] },
+        { id: "mail", kind: "set", repository: "simai/ui-mail", families: ["mail"], names: [{ element: "sf-mail-canvas", status: "released" }] },
+    ];
+    const receiptOf = (passportValue, relations, withRegistry = true) => {
+        const release = setRelease({ passportValue: { ...passportValue, components: [component] }, rules: { "cl-glow": { ...rules["cl-glow"], relation: relations } } });
+        const registry = path.join(release.workspace, "names.json");
+        fs.writeFileSync(registry, JSON.stringify({ owners: registryOwners }));
+        return run("python3", [RECEIPT, "--report", path.join(release.workspace, "report.json"), "--ui", ui, ...(withRegistry ? ["--registry", registry] : [])]);
+    };
+    const requiresView = passport({ requires_sets: [{ id: "view", range: ">=1.3.0 <2.0.0" }] });
+
+    const met = receiptOf(requiresView, rules["cl-glow"].relation);
+    assert.equal(met.status, 0, met.stderr);
+
+    // Not required: the same relation is refused.
+    const notRequired = receiptOf(passport(), rules["cl-glow"].relation);
+    assert.notEqual(notRequired.status, 0);
+    assert.match(notRequired.stderr, /cl-glow: relation cl-view-properties is neither a package rule nor a rule of ui-[0-9a-f]{12} nor of a set the passport requires/u);
+
+    // Required, but the rule is another set's: refused.
+    const otherSet = receiptOf(requiresView, [{ name: "cl-buttons" }, { name: "cl-mail-canvas" }]);
+    assert.notEqual(otherSet.status, 0);
+    assert.match(otherSet.stderr, /relation cl-mail-canvas is neither/u);
+
+    // No registry: the required set's names are unknown, so the relation is refused.
+    const noRegistry = receiptOf(requiresView, rules["cl-glow"].relation, false);
+    assert.notEqual(noRegistry.status, 0);
+    assert.match(noRegistry.stderr, /relation cl-view-properties is neither/u);
 });
 
 test("the generic route lays the build, binds the lock, passes its gate and never touches main", () => {

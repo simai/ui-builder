@@ -169,6 +169,32 @@ def check_set(report, output_root, name, rules, licence, registry_path):
     }
 
 
+# The shared name registry a set's receipt is checked against (--registry);
+# build_receipt sets it before the checks run.
+SET_REGISTRY = {'path': None}
+
+
+def required_set_rules(output_root):
+    """The rules of the sets a set's passport requires (requires_sets): cl- and
+    the element without sf-, for every name the shared registry gives that set's
+    owner. A relation to one is met on the page, which declares the required set
+    itself (data-sf-sets), so it is neither a rule of the set nor of the free
+    release. Without a registry, or a set that requires none, there are none."""
+    passport_path = Path(output_root) / SET_PASSPORT
+    if not SET_REGISTRY['path'] or not passport_path.is_file():
+        return set()
+    required = {item.get('id') for item in json.loads(passport_path.read_text()).get('requires_sets') or []}
+    if not required:
+        return set()
+    names = json.loads(Path(SET_REGISTRY['path']).read_text())
+    return {
+        'cl-' + item['element'][3:]
+        for owner in names.get('owners', [])
+        if owner.get('kind') == 'set' and owner.get('id') in required
+        for item in owner.get('names', [])
+        if str(item.get('element', '')).startswith('sf-')
+    }
+
 def deterministic_tar(root, files):
     """A plain ustar archive of the output: entries sorted, directories before
     their files, owner 0:0 with empty names, mtime 0, modes 0755 and 0644. The
@@ -236,11 +262,12 @@ def check_against_release(ui_root, release_lock, name, rules, folders, output_ro
     free_rules = json.loads(git(ui_root, 'show', f'{release}:distr/rule/rule.json'))
     free_names = {rule['name'] for rule in free_rules}
     free_tags = {tag for rule in free_rules for tag in rule.get('tags', [])}
+    of_required_sets = required_set_rules(output_root) if is_set else set()
     problems = []
     for rule_name, rule in rules.items():
         for relation in rule.get('relation', []):
-            if relation['name'] not in rules and relation['name'] not in free_names:
-                problems.append(f'{rule_name}: relation {relation["name"]} is neither a package rule nor a rule of {framework}')
+            if relation['name'] not in rules and relation['name'] not in free_names and relation['name'] not in of_required_sets:
+                problems.append(f'{rule_name}: relation {relation["name"]} is neither a package rule nor a rule of {framework}' + (' nor of a set the passport requires' if is_set else ''))
         for tag in rule['tags']:
             if tag in free_tags:
                 problems.append(f'{rule_name}: <{tag}> is also an element of the free release {framework}')
@@ -393,6 +420,7 @@ def required_files(rules):
 
 
 def build_receipt(args):
+    SET_REGISTRY['path'] = args.registry
     report_path = Path(args.report).resolve()
     workspace = report_path.parent
     report = json.loads(report_path.read_text())
