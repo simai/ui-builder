@@ -17,7 +17,11 @@ expression). A package without a declared licence gets no receipt.
 With `--ui`, the package is also checked against the free release:
 
 - every relation of a package rule names a rule of the package or of the
-  release (`distr/rule/rule.json`), and no package element is a free one;
+  release (`distr/rule/rule.json`), or a former rule name the release still
+  forwards (`distr/core/contracts/smart-rule-forwards.v1.json`, a dated
+  redirect to one of those rules) on or before its remove_after; the receipt
+  records each such relation as resolved, and an expired forward is refused.
+  No package element is a free one;
 - when the release publishes a package reference for this name
   (`distr/core/contracts/packages/<name>.package.json`), it must agree with the
   package rules: the same rules, elements and folders, none of the folders in
@@ -37,6 +41,7 @@ Usage:
       [--registry NAMES_JSON] [--output FILE] [--archive FILE]
 """
 import argparse
+import datetime
 import hashlib
 import importlib.util
 import io
@@ -53,6 +58,11 @@ RUNTIME_PATH = 'smart'
 RULE_FILE = 'smart/rule.js'
 RULE_FILE_PATTERN = re.compile(r'(?s)(?://[^\n]*\n)*SF\.RuleLoader\.registerPackage\("([a-z][a-z0-9-]*)", \{\n(?:  api: "(cl-[a-z][a-z0-9-]*)",\n)?  rules: (.*),\n\}\);\n')
 SET_PASSPORT = 'set.json'
+# Former Smart rule names the free release still answers to: each is a dated
+# redirect to a current rule (the Loader takes a relation that names one as its
+# target) until its remove_after, inclusive.
+RULE_FORWARDS = 'distr/core/contracts/smart-rule-forwards.v1.json'
+RULE_FORWARD_HOPS = 8
 RELEASE_LOCK = re.compile(r'ui-[0-9a-f]{12}\.lock\.json')
 # An SPDX license expression: ids (`Apache-2.0`, `LicenseRef-SIMAI-Commercial`,
 # `GPL-2.0-or-later`, `MIT+`), AND / OR / WITH, parentheses. npm's
@@ -253,7 +263,46 @@ def resolve_release(ui_root, source_revision):
     return found[-1], [lock['compatibility_id'] for lock in found]
 
 
-def check_against_release(ui_root, release_lock, name, rules, folders, output_root, is_set=False, core_rule=None):
+def today():
+    """The date a forward's remove_after is compared with: today, in UTC."""
+    return datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+
+
+def read_rule_forwards(ui_root, revision):
+    """The release's former rule names: {name: {to, since, remove_after, journal}}.
+    A release from before the contract forwards none."""
+    if not exists(ui_root, revision, RULE_FORWARDS):
+        return {}
+    return json.loads(git(ui_root, 'show', f'{revision}:{RULE_FORWARDS}')).get('forwards') or {}
+
+
+def resolve_relation(name, known, forwards, as_of):
+    """A relation as the page's Loader resolves it.
+
+    Returns (target, hops, problem): a name in `known` (the package's rules,
+    the release's, those of the sets a passport requires) is itself, with no
+    hops; a former name the release forwards is followed, hop by hop, to a
+    known rule, each hop live on `as_of` (remove_after is the last day it
+    works). Anything else is (None, hops, why)."""
+    hops = []
+    current = name
+    while current not in known:
+        forward = forwards.get(current)
+        if not isinstance(forward, dict) or not forward.get('to'):
+            return None, hops, None if not hops else f'leads through {" -> ".join([name, *(hop["to"] for hop in hops)])} to no rule'
+        remove_after = forward.get('remove_after')
+        if not isinstance(remove_after, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', remove_after):
+            return None, hops, f'is forwarded to {forward["to"]} with no remove_after date'
+        if as_of > remove_after:
+            return None, hops, f'is a former name forwarded to {forward["to"]} until {remove_after}; the forward has expired ({as_of})'
+        hops.append({'from': current, 'to': forward['to'], 'since': forward.get('since'), 'remove_after': remove_after, 'journal': forward.get('journal')})
+        if len(hops) > RULE_FORWARD_HOPS or forward['to'] in (hop['from'] for hop in hops):
+            return None, hops, 'is forwarded in a loop'
+        current = forward['to']
+    return current, hops, None
+
+
+def check_against_release(ui_root, release_lock, name, rules, folders, output_root, is_set=False, core_rule=None, as_of=None):
     framework = release_lock['compatibility_id']
     release = release_lock['runtime_sources']['core']['revision']
     # Contracts are read where the release's own lock is: the bind commit that
@@ -263,11 +312,32 @@ def check_against_release(ui_root, release_lock, name, rules, folders, output_ro
     free_names = {rule['name'] for rule in free_rules}
     free_tags = {tag for rule in free_rules for tag in rule.get('tags', [])}
     of_required_sets = required_set_rules(output_root) if is_set else set()
+    forwards = read_rule_forwards(ui_root, release)
+    known = set(rules) | free_names | of_required_sets
+    as_of = as_of or today()
     problems = []
+    resolved = {}
+    aliases = []
     for rule_name, rule in rules.items():
         for relation in rule.get('relation', []):
-            if relation['name'] not in rules and relation['name'] not in free_names and relation['name'] not in of_required_sets:
-                problems.append(f'{rule_name}: relation {relation["name"]} is neither a package rule nor a rule of {framework}' + (' nor of a set the passport requires' if is_set else ''))
+            target, hops, why = resolve_relation(relation['name'], known, forwards, as_of)
+            if target is None:
+                problems.append(f'{rule_name}: relation {relation["name"]} '
+                                + (why or f'is neither a package rule nor a rule of {framework}' + (' nor of a set the passport requires' if is_set else '')
+                                   + ' nor a former name it forwards'))
+                continue
+            resolved[relation['name']] = target
+            if hops:
+                aliases.append({
+                    'rule': rule_name,
+                    'relation': relation['name'],
+                    'resolves_to': target,
+                    'kind': 'rule-forward',
+                    'contract': RULE_FORWARDS,
+                    'since': hops[0]['since'],
+                    'remove_after': min(hop['remove_after'] for hop in hops),
+                    'journal': [hop['journal'] for hop in hops],
+                })
         for tag in rule['tags']:
             if tag in free_tags:
                 problems.append(f'{rule_name}: <{tag}> is also an element of the free release {framework}')
@@ -275,6 +345,8 @@ def check_against_release(ui_root, release_lock, name, rules, folders, output_ro
         problems.append(f'{core_rule}: the free release {framework} ships distr/smart/{core_rule[3:]}')
     if problems:
         raise ReceiptError(f'the package and the free release {framework} disagree:\n  ' + '\n  '.join(problems))
+    for alias in aliases:
+        warn(f'{alias["rule"]}: relation {alias["relation"]} is a former name; {framework} forwards it to {alias["resolves_to"]} until {alias["remove_after"]}')
     # The package core's rule is the builder's, not a component: a reference
     # names the components only, and their relation to the core is not a
     # registry requirement.
@@ -282,6 +354,8 @@ def check_against_release(ui_root, release_lock, name, rules, folders, output_ro
 
     reference_path = f'distr/core/contracts/packages/{name}.package.json'
     result = {'path': reference_path, 'release': framework}
+    if aliases:
+        result['relation_aliases'] = sorted(aliases, key=lambda item: (item['rule'], item['relation']))
     if is_set:
         # A set describes itself (set.json); SIMAI Framework keeps no reference.
         return {**result, 'status': 'set-passport'}
@@ -311,10 +385,11 @@ def check_against_release(ui_root, release_lock, name, rules, folders, output_ro
             problems.append(f'{rule_name}: no folder {item["folder"]} in the build output')
         if exists(ui_root, release, f'distr/smart/{item["folder"]}'):
             problems.append(f'{rule_name}: the free release {framework} still ships distr/smart/{item["folder"]}')
+        # A forwarded relation requires what it resolves to.
         requires = sorted({
-            package_ids[relation['name']] if relation['name'] in package_ids else builder.relation_id(relation['name'], kinds)
-            for relation in rule.get('relation', [])
-            if relation['name'] != core_rule
+            package_ids[target] if target in package_ids else builder.relation_id(target, kinds)
+            for target in (resolved[relation['name']] for relation in rule.get('relation', []))
+            if target != core_rule
         })
         if requires != item['requires']:
             problems.append(f'{rule_name}: relations {requires}, the reference requires {item["requires"]}')
@@ -484,7 +559,7 @@ def build_receipt(args):
             framework['release'] = release_lock['compatibility_id']
             if len(candidates) > 1:
                 framework['release_candidates'] = candidates
-            reference = check_against_release(args.ui, release_lock, name, rules, folders, output_root, is_set, core_rule)
+            reference = check_against_release(args.ui, release_lock, name, rules, folders, output_root, is_set, core_rule, args.as_of)
             framework['runtime_check'] = check_runtime_against_release(args.ui, release_lock, report.get('runtime'))
 
     by_path = {item['path']: item for item in files}
@@ -568,9 +643,12 @@ def main():
     parser.add_argument('--report', type=Path, required=True, help='report.json of verify-package-reproducibility.cjs')
     parser.add_argument('--ui', type=Path, help='a ui checkout: resolve the free release and check the package against it')
     parser.add_argument('--registry', type=Path, help='a component set: the shared name registry (ui-source contracts/registry/names.json at main)')
+    parser.add_argument('--as-of', help='the date (YYYY-MM-DD) a forwarded relation must still be live on; default: today, UTC')
     parser.add_argument('--output', type=Path, help='default: package-receipt.json beside the report')
     parser.add_argument('--archive', type=Path, help='default: package-<name>.tar beside the report')
     args = parser.parse_args()
+    if args.as_of is not None and not re.fullmatch(r'\d{4}-\d{2}-\d{2}', args.as_of):
+        parser.error('--as-of takes a date, YYYY-MM-DD')
     try:
         build_receipt(args)
     except ReceiptError as error:

@@ -67,6 +67,11 @@ ReleaseError = shared.ReleaseError
 sha, git, text, exists, write = shared.sha, shared.git, shared.text, shared.exists, shared.write
 writer, tree_entry, input_entry, framework_lock = shared.writer, shared.tree_entry, shared.input_entry, shared.framework_lock
 files_under = shared.files_under
+# A relation to a former rule name the free release still forwards is resolved
+# the way the package receipt resolves it (scripts/write-package-receipt.py).
+_receipt_spec = importlib.util.spec_from_file_location('write_package_receipt', BUILDER_ROOT / 'scripts/write-package-receipt.py')
+receipt_rules = importlib.util.module_from_spec(_receipt_spec)
+_receipt_spec.loader.exec_module(receipt_rules)
 
 
 def load_registry_builder(ui_root):
@@ -87,18 +92,31 @@ def read_rule_file(path):
 def expected_requires(rules, ui_root, revision):
     """Each Pro rule's relations as registry ids: a Pro rule by the package's
     id for it, any other by the free registry's mapping over the release's
-    rule.json."""
+    rule.json. A former rule name the release still forwards
+    (smart-rule-forwards.v1.json) requires what it resolves to; an expired
+    forward, or a relation that leads nowhere, is refused."""
     builder = load_registry_builder(ui_root)
     reference = json.loads(git(ui_root, 'show', f'{revision}:{PACKAGE_REFERENCE}'))
     pro_ids = {item['rule_name']: item['id'] for item in reference['provides']}
     free_rules = json.loads(git(ui_root, 'show', f'{revision}:distr/rule/rule.json'))
     kinds = {rule['name']: rule.get('type', 'utility') for rule in free_rules}
+    forwards = receipt_rules.read_rule_forwards(ui_root, revision)
+    known = set(rules) | set(kinds)
+    as_of = receipt_rules.today()
     requires = {}
+    problems = []
     for name, rule in rules.items():
         ids = set()
         for relation in rule.get('relation', []):
-            ids.add(pro_ids[relation['name']] if relation['name'] in pro_ids else builder.relation_id(relation['name'], kinds))
+            target, _, why = receipt_rules.resolve_relation(relation['name'], known, forwards, as_of)
+            if target is None:
+                if why:
+                    problems.append(f'{name}: relation {relation["name"]} {why}')
+                target = relation['name']
+            ids.add(pro_ids[target] if target in pro_ids else builder.relation_id(target, kinds))
         requires[name] = sorted(ids)
+    if problems:
+        raise ReleaseError('the Pro rules and the free release disagree:\n  ' + '\n  '.join(problems))
     return reference, requires
 
 

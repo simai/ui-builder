@@ -221,10 +221,11 @@ const REGISTRY_BUILDER = [
 ].join("\n");
 
 /** A ui checkout with one free release built from `sourceRevision`. */
-function freeRelease(sourceRevision, reference, runtimeContract = null)
+function freeRelease(sourceRevision, reference, runtimeContract = null, forwards = null)
 {
     const ui = repository({
         "scripts/build-framework-registry.py": REGISTRY_BUILDER,
+        ...(forwards ? { "distr/core/contracts/smart-rule-forwards.v1.json": `${JSON.stringify({ version: 1, forwards })}\n` } : {}),
         ...(runtimeContract ? { "distr/core/contracts/shared-runtime.v1.json": `${JSON.stringify(runtimeContract)}\n` } : {}),
         "distr/rule/rule.json": `${JSON.stringify([
             { name: "icons", type: "component", tags: ["sf-icon"] },
@@ -279,9 +280,9 @@ function packageWorkspace(sourceRevision, rules, manifest = { name: "@example/ac
     return { output, product, workspace };
 }
 
-function receipt(workspace, ui)
+function receipt(workspace, ui, extra = [])
 {
-    const result = spawnSync("python3", [RECEIPT_SCRIPT, "--report", path.join(workspace, "report.json"), ...(ui ? ["--ui", ui] : [])], { encoding: "utf8" });
+    const result = spawnSync("python3", [RECEIPT_SCRIPT, "--report", path.join(workspace, "report.json"), ...(ui ? ["--ui", ui] : []), ...extra], { encoding: "utf8" });
     const file = path.join(workspace, "package-receipt.json");
     return { result, value: result.status === 0 ? JSON.parse(fs.readFileSync(file, "utf8")) : null };
 }
@@ -386,6 +387,64 @@ test("a missing package reference is a warning; a disagreeing one, a dangling re
     assert.equal(unreleased.result.status, 0, unreleased.result.stderr);
     assert.equal(unreleased.value.framework.release, null);
     assert.equal(unreleased.value.package_reference.status, "no-release");
+});
+
+const FORWARDS = {
+    "cl-button-group": { to: "cl-buttons", since: "2026-11-08", remove_after: "2027-01-01", journal: "path-smart-button-group-to-buttons" },
+    "cl-old-gauge": { to: "cl-gauge", since: "2026-11-03", remove_after: "2027-01-01", journal: "path-smart-old-gauge-to-gauge" },
+    "cl-gone": { to: "cl-nowhere", since: "2026-11-03", remove_after: "2027-01-01", journal: "path-smart-gone" },
+};
+const FORWARDED_RULES = {
+    ...RULES,
+    "cl-widget": { ...RULES["cl-widget"], relation: [{ name: "cl-button-group" }, { name: "cl-old-gauge" }] },
+};
+
+test("a relation to a former rule name the release forwards is accepted and recorded as resolved", () => {
+    const source = "a".repeat(40);
+    const { id, ui } = freeRelease(source, REFERENCE, null, FORWARDS);
+    const { workspace } = packageWorkspace(source, FORWARDED_RULES);
+    for (const asOf of ["2026-11-09", "2027-01-01"])
+    {
+        const { result, value } = receipt(workspace, ui, ["--as-of", asOf]);
+        assert.equal(result.status, 0, result.stderr);
+        // The reference requires what the forward resolves to (a free rule, a package rule).
+        assert.equal(value.package_reference.status, "agrees");
+        assert.deepEqual(value.package_reference.relation_aliases, [
+            { rule: "cl-widget", relation: "cl-button-group", resolves_to: "cl-buttons", kind: "rule-forward", contract: "distr/core/contracts/smart-rule-forwards.v1.json", since: "2026-11-08", remove_after: "2027-01-01", journal: ["path-smart-button-group-to-buttons"] },
+            { rule: "cl-widget", relation: "cl-old-gauge", resolves_to: "cl-gauge", kind: "rule-forward", contract: "distr/core/contracts/smart-rule-forwards.v1.json", since: "2026-11-03", remove_after: "2027-01-01", journal: ["path-smart-old-gauge-to-gauge"] },
+        ]);
+        assert.deepEqual(value.inventory.elements.find(item => item.rule_name === "cl-widget").relations, ["cl-button-group", "cl-old-gauge"]);
+        assert.match(result.stderr, new RegExp(`cl-widget: relation cl-button-group is a former name; ${id} forwards it to cl-buttons until 2027-01-01`, "u"));
+    }
+    // Without a former name, the receipt carries no aliases.
+    const plain = receipt(packageWorkspace(source, RULES).workspace, ui, ["--as-of", "2026-11-09"]);
+    assert.equal(plain.result.status, 0, plain.result.stderr);
+    assert.equal("relation_aliases" in plain.value.package_reference, false);
+});
+
+test("a relation the release neither has nor forwards, or forwards to no rule, is refused", () => {
+    const source = "a".repeat(40);
+    const { ui } = freeRelease(source, null, null, FORWARDS);
+    const unknown = packageWorkspace(source, { ...RULES, "cl-gauge": { ...RULES["cl-gauge"], relation: [{ name: "cl-button-groups" }] } });
+    const refused = receipt(unknown.workspace, ui, ["--as-of", "2026-11-09"]);
+    assert.equal(refused.result.status, 1);
+    assert.match(refused.result.stderr, /cl-gauge: relation cl-button-groups is neither a package rule nor a rule of ui-[0-9a-f]{12} nor a former name it forwards/u);
+
+    const dangling = packageWorkspace(source, { ...RULES, "cl-gauge": { ...RULES["cl-gauge"], relation: [{ name: "cl-gone" }] } });
+    const nowhere = receipt(dangling.workspace, ui, ["--as-of", "2026-11-09"]);
+    assert.equal(nowhere.result.status, 1);
+    assert.match(nowhere.result.stderr, /cl-gauge: relation cl-gone leads through cl-gone -> cl-nowhere to no rule/u);
+});
+
+test("a relation to a former rule name whose forward has expired is refused", () => {
+    const source = "a".repeat(40);
+    const { ui } = freeRelease(source, REFERENCE, null, FORWARDS);
+    const { workspace } = packageWorkspace(source, FORWARDED_RULES);
+    const { result } = receipt(workspace, ui, ["--as-of", "2027-01-02"]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /cl-widget: relation cl-button-group is a former name forwarded to cl-buttons until 2027-01-01; the forward has expired \(2027-01-02\)/u);
+    assert.match(result.stderr, /cl-widget: relation cl-old-gauge is a former name forwarded to cl-gauge until 2027-01-01; the forward has expired/u);
+    assert.equal(receipt(workspace, ui, ["--as-of", "1 Jan 2027"]).result.status, 2);
 });
 
 test("the receipt refuses an output the report did not hash, or a rule file of another package", () => {
