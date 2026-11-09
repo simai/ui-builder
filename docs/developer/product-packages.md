@@ -385,6 +385,25 @@ compatibility index (`simai.framework.set-index` v1, published as
 it refuses a release over no free pair and a version already indexed.
 `set-index.py check` is the index's gate.
 
+### Pair ranges (proposal, not part of the route)
+
+`scripts/set-pair-range.py write` reads a released set (`--repo` and
+`--release`: the lock at HEAD and the output at its Build commit; or
+`--output` and `--lock`) and writes its pair range,
+`simai.framework.set-pair-range` v1: what the released bytes take from the
+free pair at runtime, read over the pair they were built over -- the
+`core.runtime` minimum, the shared runtime ABI and the names imported from
+each shared module, every relation to a rule that is not the set's own, the
+set's elements, its package core folder, the `--sf-*` properties it reads
+bare and the pair declares, and the public `window.SF` names it calls -- with
+`interface_sha256`, the digest of that list. `set-pair-range.py check --range
+<file> --ui <ui> --pair <ui-12>` (repeated, or `--all`) answers, from the
+pair's `distr` alone, whether each pair still offers all of it (`within`) or
+why not (`outside`); exit 1 when one is outside. A range covers no behaviour
+behind an unchanged interface, no Framework code a bundle inlined, and none
+of the set's gates over the pair. It changes nothing a release, a package
+receipt, a pair receipt or the index holds; no consumer reads it yet.
+
 ## SIMAI Framework Pro
 
 SIMAI Framework Pro is dropped; its four components move into Larena's package.
