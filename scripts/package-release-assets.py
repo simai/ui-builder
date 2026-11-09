@@ -13,7 +13,13 @@ is a GitHub release on the set's repository. It carries:
   package-receipt.json      the receipt of the build;
   set-<set>-<12>.json       the passport stamped with its release block
                             (a set's release only: a package whose receipt
-                            has no set block carries none).
+                            has no set block carries none);
+  pair-range.json           a set release over a free pair: its pair range
+                            (simai.framework.set-pair-range v1,
+                            set-pair-range.py write). Optional: releases
+                            before standard simai.component-set 1.2.0 carry
+                            none, or gain it later, uploaded beside the
+                            assets that were there.
 
 Both archives are one archive: their sha256 is the receipt's
 output.archive_sha256 and the release lock's output.archive_sha256.
@@ -38,6 +44,8 @@ import tempfile
 from pathlib import Path
 
 RELEASE = re.compile(r'^(?P<set>[a-z][a-z0-9-]*)-(?P<hex>[0-9a-f]{12})$')
+RANGE = 'pair-range.json'
+RANGE_SCHEMA = 'simai.framework.set-pair-range'
 
 
 class AssetError(Exception):
@@ -99,6 +107,8 @@ def check_folder(folder, identifier, lock=None):
         passport = json.loads((folder / expected['passport']).read_text(encoding='utf-8'))
         if passport.get('id') != name or (passport.get('release') or {}).get('id') != identifier:
             raise AssetError(f'{identifier}: {expected["passport"]} is not the stamped passport of {identifier}')
+    if (folder / RANGE).is_file():
+        check_range(folder / RANGE, identifier, archive, sha(folder / expected['receipt']))
     if lock is not None:
         value = json.loads(Path(lock).read_text(encoding='utf-8'))
         if value.get('id') != identifier:
@@ -108,6 +118,26 @@ def check_folder(folder, identifier, lock=None):
         if value.get('receipt', {}).get('sha256') != sha(folder / expected['receipt']):
             raise AssetError(f'{identifier}: the receipt is not the one the lock binds')
     return archive
+
+
+def check_range(path, identifier, archive, receipt_sha256):
+    """The pair range describes this very release: its id, archive and receipt,
+    and an interface_sha256 that is the digest of its requires."""
+    try:
+        document = json.loads(Path(path).read_text(encoding='utf-8'))
+    except ValueError as error:
+        raise AssetError(f'{identifier}: {RANGE} is not JSON: {error}') from None
+    name, _ = parse_release(identifier)
+    if not isinstance(document, dict) or document.get('schema') != RANGE_SCHEMA or document.get('schema_version') != 1:
+        raise AssetError(f'{identifier}: {RANGE} is not a {RANGE_SCHEMA} v1')
+    package = document.get('package') or {}
+    if document.get('release') != identifier or document.get('set') != name:
+        raise AssetError(f'{identifier}: {RANGE} is the range of {document.get("release")!r}')
+    if package.get('archive_sha256') != archive or package.get('receipt_sha256') != receipt_sha256:
+        raise AssetError(f'{identifier}: {RANGE} names another archive or receipt')
+    requires = json.dumps(document.get('requires'), ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()
+    if hashlib.sha256(requires).hexdigest() != document.get('interface_sha256'):
+        raise AssetError(f'{identifier}: {RANGE} interface_sha256 is not the digest of its requires')
 
 
 def prepare_phase(args):
@@ -136,8 +166,12 @@ def prepare_phase(args):
     shutil.copyfile(receipt_path, out / expected['receipt'])
     if is_set:
         shutil.copyfile(passport, out / expected['passport'])
+    laid = sorted(expected.values())
+    if (work / RANGE).is_file():
+        shutil.copyfile(work / RANGE, out / RANGE)
+        laid = sorted(laid + [RANGE])
     check_folder(out, args.release, args.lock)
-    print(json.dumps({'release': args.release, 'archive_sha256': archive, 'assets': sorted(expected.values()), 'out': str(out)}))
+    print(json.dumps({'release': args.release, 'archive_sha256': archive, 'assets': laid, 'out': str(out)}))
 
 
 def check_phase(args):
@@ -157,6 +191,12 @@ def check_phase(args):
             for asset in names(args.release, bool(receipt.get('set'))).values():
                 if asset != 'package-receipt.json':
                     download(asset)
+            listed = subprocess.run(['gh', 'release', 'view', args.release, '-R', args.github, '--json', 'assets', '-q', '.assets[].name'],
+                                    capture_output=True, text=True)
+            if listed.returncode != 0:
+                raise AssetError(f'{args.release} on {args.github}: the assets could not be listed: {listed.stderr.strip()}')
+            if RANGE in listed.stdout.split():
+                download(RANGE)
             archive = check_folder(folder, args.release, args.lock)
     print(f'ASSETS {args.release} archive_sha256={archive} (package-{parse_release(args.release)[0]}.tar and package-{args.release}.tar are the same bytes)')
 

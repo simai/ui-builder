@@ -1,8 +1,9 @@
 "use strict";
 
-// Component sets (standard simai.component-set 1.0.0): the api rule in the
-// generated rule file, the passport checks of the receipt, the generic
-// release route (publish-package-release.sh, bind-package-release.py) and
+// Component sets (standard simai.component-set 1.0.0, pair ranges since
+// 1.2.0): the api rule in the generated rule file, the passport checks of the
+// receipt, the generic release route (publish-package-release.sh,
+// bind-package-release.py, the pair range of a release over a free pair) and
 // the compatibility index (set-index.py).
 
 const assert = require("node:assert/strict");
@@ -364,4 +365,126 @@ test("the compatibility index takes a row from a bound release, once, and only o
     value.releases.push({ ...value.releases[0], version: "0.9.0" });
     fs.writeFileSync(index, JSON.stringify(value));
     assert.match(run("python3", [INDEX, "check", "--index", index]).stderr, /not in order/u);
+});
+
+/** A ui checkout holding one free pair built from SOURCE_REVISION. */
+function freePair()
+{
+    const ui = fs.mkdtempSync(path.join(os.tmpdir(), "set-ui-"));
+    git(ui, "init", "-q", "-b", "main");
+    const build = commit(ui, {
+        "distr/rule/rule.json": `${JSON.stringify([{ name: "cl-buttons", type: "smart", tags: ["sf-button"] }])}\n`,
+        "distr/core/passports/core.runtime.json": `${JSON.stringify({ schema: "simai.framework.unit-passport", id: "core.runtime", version: "1.42.0" })}\n`,
+        "distr/core/css/core.css": ":root{--sf-space-1:4px}\n",
+    }, "build");
+    const pair = `ui-${build.slice(0, 12)}`;
+    commit(ui, {
+        [`contracts/releases/${pair}.lock.json`]: `${JSON.stringify({
+            schema_version: 2, compatibility_id: pair,
+            runtime_sources: { core: { revision: build } }, build_inputs: { source: { commit: SOURCE_REVISION } },
+        })}\n`,
+    }, "bind");
+    return { ui, pair };
+}
+
+test("over a free pair the route writes the pair range into the bind, the assets and the index row", () => {
+    const { ui, pair } = freePair();
+    const { repo, revision, workspace } = setRelease();
+    const work = path.join(workspace, "release");
+    const index = path.join(workspace, "sets/index.json");
+    const published = run("bash", [PUBLISH, "--report", path.join(workspace, "report.json"), "--repo", repo, "--ui", ui,
+        "--version", "1.0.0", "--subject", "over a pair", "--work", work, "--index", index], {
+        env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.invalid", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.invalid" },
+    });
+    assert.equal(published.status, 0, published.stderr + published.stdout);
+    const id = `fx-${revision.slice(0, 12)}`;
+    const lockPath = path.join(repo, `contracts/releases/${id}.lock.json`);
+    const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+    assert.equal(lock.requires.framework, pair);
+
+    // One bind commit holds the lock and the range.
+    assert.deepEqual(git(repo, "log", "--format=%s", "-2").split("\n"), [`Bind the fx release ${id}`, "Build: fx over a pair"]);
+    assert.deepEqual(git(repo, "show", "--name-only", "--format=", "HEAD").split("\n").sort(),
+        [`contracts/pair-ranges/${id}.json`, `contracts/releases/${id}.lock.json`]);
+    const bytes = fs.readFileSync(path.join(repo, `contracts/pair-ranges/${id}.json`));
+    const range = JSON.parse(bytes);
+    assert.equal(range.schema, "simai.framework.set-pair-range");
+    assert.equal(range.release, id);
+    assert.equal(range.built_over.pair, pair);
+    assert.equal(range.package.archive_sha256, lock.output.archive_sha256);
+    assert.deepEqual(range.requires.free_elements, []);
+    assert.equal(range.requires.core_runtime, ">=1.25.0");
+    assert.equal(run("python3", [BIND, "check", "--repo", repo, "--ui-root", ui]).status, 0, "the release gate stays green");
+
+    // The same bytes are a release asset, checked with the others.
+    const assets = path.join(work, "assets");
+    assert.ok(fs.readdirSync(assets).includes("pair-range.json"));
+    assert.ok(fs.readFileSync(path.join(assets, "pair-range.json")).equals(bytes));
+    assert.equal(run("python3", [ASSETS, "check", "--dir", assets, "--release", id, "--lock", lockPath]).status, 0);
+    const dry = run("bash", [UPLOAD, "--assets", assets, "--release", id, "--github", "example/ui-fx", "--dry-run"]);
+    assert.equal(dry.status, 0, dry.stderr);
+    assert.ok(dry.stdout.includes(path.join(assets, "pair-range.json")), "the release carries pair-range.json");
+
+    // A range of another release is refused among the assets.
+    const other = { ...range, release: "fx-000000000000" };
+    fs.writeFileSync(path.join(assets, "pair-range.json"), JSON.stringify(other));
+    assert.match(run("python3", [ASSETS, "check", "--dir", assets, "--release", id]).stderr, /pair-range\.json is the range of 'fx-000000000000'/u);
+    fs.writeFileSync(path.join(assets, "pair-range.json"), bytes);
+
+    // The index row names the range by its bytes and its interface.
+    const row = JSON.parse(fs.readFileSync(index, "utf8")).releases.find((item) => item.release === id);
+    assert.deepEqual(row.range, { sha256: sha256(bytes), interface_sha256: range.interface_sha256 });
+    assert.equal(run("python3", [INDEX, "check", "--index", index]).status, 0);
+});
+
+test("set-index range names a range once, only the range of that row, and check reads it", () => {
+    const { ui } = freePair();
+    const { repo, revision, workspace } = setRelease();
+    const work = path.join(workspace, "release");
+    const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.invalid", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.invalid" };
+    const published = run("bash", [PUBLISH, "--report", path.join(workspace, "report.json"), "--repo", repo, "--ui", ui,
+        "--version", "1.0.0", "--subject", "s", "--work", work], { env });
+    assert.equal(published.status, 0, published.stderr + published.stdout);
+    const id = `fx-${revision.slice(0, 12)}`;
+    const index = path.join(workspace, "sets/index.json");
+    const rangePath = path.join(work, "pair-range.json");
+    const range = JSON.parse(fs.readFileSync(rangePath, "utf8"));
+    const name = (file) => run("python3", [INDEX, "range", "--index", index, "--range", file]);
+
+    assert.match(name(rangePath).stderr, new RegExp(`${id} is not indexed`, "u"), "the row comes first");
+    assert.equal(run("python3", [INDEX, "add", "--index", index, "--passport", path.join(work, "set.json"),
+        "--lock", path.join(repo, `contracts/releases/${id}.lock.json`), "--published-on", "2026-11-09"]).status, 0);
+
+    const edited = path.join(work, "edited.json");
+    fs.writeFileSync(edited, JSON.stringify({ ...range, requires: { ...range.requires, core_runtime: ">=0.0.1" } }));
+    assert.match(name(edited).stderr, /interface_sha256 is not the digest of its requires/u);
+    const otherArchive = path.join(work, "other.json");
+    fs.writeFileSync(otherArchive, JSON.stringify({ ...range, package: { ...range.package, archive_sha256: "7".repeat(64) } }));
+    assert.match(name(otherArchive).stderr, /package\.archive_sha256 7{64}, the row of/u);
+
+    const first = name(rangePath);
+    assert.equal(first.status, 0, first.stderr);
+    assert.equal(name(rangePath).status, 0, "the same range again changes nothing");
+    const reformatted = path.join(work, "reformatted.json");
+    fs.writeFileSync(reformatted, JSON.stringify(range));
+    assert.match(name(reformatted).stderr, /already names another range/u, "other bytes are another range");
+
+    const value = JSON.parse(fs.readFileSync(index, "utf8"));
+    assert.equal(run("python3", [INDEX, "check", "--index", index]).status, 0);
+    value.releases[0].range = { sha256: "x" };
+    fs.writeFileSync(index, JSON.stringify(value));
+    assert.match(run("python3", [INDEX, "check", "--index", index]).stderr, /range is not \{sha256, interface_sha256\}/u);
+});
+
+test("a release built over no free pair binds its lock alone, with no pair range", () => {
+    const { repo, workspace } = setRelease();
+    // Without --ui the receipt names no pair, so there is nothing to range: the
+    // route says so and binds the lock alone.
+    const published = run("bash", [PUBLISH, "--report", path.join(workspace, "report.json"), "--repo", repo,
+        "--version", "1.0.0", "--subject", "s", "--work", path.join(workspace, "release")], {
+        env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.invalid", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.invalid" },
+    });
+    assert.equal(published.status, 0, published.stderr);
+    assert.match(published.stdout, /no free pair: fx-[0-9a-f]{12} carries no pair range/u);
+    assert.equal(fs.existsSync(path.join(repo, "contracts/pair-ranges")), false);
 });

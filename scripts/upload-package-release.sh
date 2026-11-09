@@ -16,7 +16,8 @@
 # The release carries package-<set>-<12>.tar and package-<set>.tar -- the
 # same bytes; consumers fetch the second name, as they fetch package-pro.tar
 # from a Pro release -- package-<set>.tar.sha256, package-receipt.json and,
-# for a set, set-<set>-<12>.json. The assets are checked before anything is
+# for a set, set-<set>-<12>.json and, over a free pair, pair-range.json (its
+# pair range, set-pair-range.py write). The assets are checked before anything is
 # sent and again after the download; a release is never moved or rewritten.
 set -euo pipefail
 
@@ -46,6 +47,7 @@ LOCK_ARGS=()
 NAME="${RELEASE%-*}"
 FILES=("$ASSETS/package-$RELEASE.tar" "$ASSETS/package-$NAME.tar" "$ASSETS/package-$NAME.tar.sha256" "$ASSETS/package-receipt.json")
 [ -f "$ASSETS/set-$RELEASE.json" ] && FILES+=("$ASSETS/set-$RELEASE.json")
+[ -f "$ASSETS/pair-range.json" ] && FILES+=("$ASSETS/pair-range.json")
 if [ -z "$TITLE" ]; then
     VERSION="$(python3 -c 'import json,sys
 try: print(json.load(open(sys.argv[1]))["release"]["version"])

@@ -385,7 +385,7 @@ compatibility index (`simai.framework.set-index` v1, published as
 it refuses a release over no free pair and a version already indexed.
 `set-index.py check` is the index's gate.
 
-### Pair ranges (proposal, not part of the route)
+### Pair ranges (standard simai.component-set 1.2.0)
 
 `scripts/set-pair-range.py write` reads a released set (`--repo` and
 `--release`: the lock at HEAD and the output at its Build commit; or
@@ -401,8 +401,26 @@ bare and the pair declares, and the public `window.SF` names it calls -- with
 pair's `distr` alone, whether each pair still offers all of it (`within`) or
 why not (`outside`); exit 1 when one is outside. A range covers no behaviour
 behind an unchanged interface, no Framework code a bundle inlined, and none
-of the set's gates over the pair. It changes nothing a release, a package
-receipt, a pair receipt or the index holds; no consumer reads it yet.
+of the set's gates over the pair: a consumer that accepts a set by range runs
+its own browser probes at each repin, and the set gets a full pair receipt
+(`pair-receipt.py`) once per release train (owner decision 2026-11-09,
+ui-control `control/decisions/2026-11-09-set-pair-ranges.md`).
+
+The release route writes the range of every release over a free pair, once,
+from the released bytes: `publish-package-release.sh` runs
+`set-pair-range.py write` after the release gate (a range its own pair does
+not hold leaves the bind uncommitted), commits it with the lock in the bind
+commit as `contracts/pair-ranges/<set>-<12>.json`, lays the same bytes as the
+release asset `pair-range.json` (checked by `package-release-assets.py`: the
+range of that release, its archive and receipt, an `interface_sha256` that is
+the digest of `requires`), and with `--index` names it on the release's row
+with `set-index.py range --index <index.json> --range <pair-range.json>`:
+`range: {sha256, interface_sha256}`, set once and never changed. A release
+over no free pair carries no range. An existing release gains one the same
+way without a rebuild: `set-pair-range.py write --repo <set> --release
+<set>-<12>`, then `gh release upload` of `pair-range.json` beside the assets
+already there, the copy committed under `contracts/pair-ranges/`, and
+`set-index.py range`.
 
 ## SIMAI Framework Pro
 

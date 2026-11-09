@@ -15,9 +15,13 @@ release lock it was bound with.
   add     Add the row of a release (and the set's entry the first time).
           Refuses a release over no free pair, a version already indexed, and
           a passport that disagrees with its lock.
+  range   Name a release's pair range on its row (`range`: the sha256 of the
+          range file, simai.framework.set-pair-range v1, and its
+          interface_sha256). The range must describe that very row; a row's
+          range is set once and never changed (set-pair-range.py write).
   check   The index holds: the format, one row per set and version, ids that
-          follow the source revision, every row's set listed, and rows in order
-          (by set, then by version).
+          follow the source revision, every row's set listed, a row's range
+          well formed, and rows in order (by set, then by version).
 """
 import argparse
 import hashlib
@@ -35,6 +39,11 @@ HEX64 = re.compile(r'^[0-9a-f]{64}$')
 DATE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 SET_KEYS = {'id', 'title', 'repository', 'npm', 'licence', 'docs'}
 ROW_KEYS = {'set', 'release', 'version', 'source_revision', 'framework', 'requires_sets', 'receipt_sha256', 'archive_sha256', 'published_on'}
+# Optional on a row: archive_sha256 (rows before it was recorded) and range
+# (since index schema 1.2.0, standard simai.component-set 1.2.0).
+OPTIONAL_ROW_KEYS = {'archive_sha256', 'range'}
+RANGE_SCHEMA = 'simai.framework.set-pair-range'
+RANGE_KEYS = {'sha256', 'interface_sha256'}
 EMPTY = {
     'schema': FORMAT,
     'schema_version': 1,
@@ -89,7 +98,7 @@ def problems(index):
     seen = set()
     for at, row in enumerate(rows):
         where = f'releases[{at}]'
-        if not set(row) <= ROW_KEYS or not (ROW_KEYS - {'archive_sha256'}) <= set(row):
+        if not set(row) <= ROW_KEYS | OPTIONAL_ROW_KEYS or not (ROW_KEYS - OPTIONAL_ROW_KEYS) <= set(row):
             found.append(f'{where}: keys {sorted(row)}')
             continue
         if row['set'] not in listed:
@@ -110,6 +119,9 @@ def problems(index):
             found.append(f'{where}: digests')
         if not DATE.match(row['published_on']):
             found.append(f'{where}.published_on')
+        if 'range' in row and (not isinstance(row['range'], dict) or set(row['range']) != RANGE_KEYS
+                               or not all(HEX64.match(str(value)) for value in row['range'].values())):
+            found.append(f'{where}.range is not {{sha256, interface_sha256}}, each 64 hex')
     order = [(row.get('set', ''), version_key(row['version'])) for row in rows if VERSION.match(str(row.get('version', '')))]
     if order != sorted(order):
         found.append('releases: not in order of set, then version')
@@ -167,6 +179,56 @@ def add(args):
                       'sha256': hashlib.sha256(Path(args.index).read_bytes()).hexdigest()}))
 
 
+def canonical(value):
+    # The digest set-pair-range.py takes of requires: keys sorted, no spaces,
+    # UTF-8, '/' and non-ASCII unescaped.
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()
+
+
+def add_range(args):
+    index = read(args.index)
+    payload = Path(args.range).read_bytes()
+    try:
+        document = json.loads(payload)
+    except ValueError as error:
+        raise IndexError_(f'{args.range}: {error}') from None
+    if not isinstance(document, dict) or document.get('schema') != RANGE_SCHEMA or document.get('schema_version') != 1 \
+            or not isinstance(document.get('requires'), dict) or not isinstance(document.get('package'), dict):
+        raise IndexError_(f'{args.range} is not a {RANGE_SCHEMA} v1')
+    interface = hashlib.sha256(canonical(document['requires'])).hexdigest()
+    if document.get('interface_sha256') != interface:
+        raise IndexError_(f'{args.range}: interface_sha256 is not the digest of its requires')
+    rows = [row for row in index['releases'] if row.get('release') == document.get('release')]
+    if not rows:
+        raise IndexError_(f'{document.get("release")} is not indexed: add the release row first')
+    row = rows[0]
+    package = document['package']
+    expected = {
+        'set': (document.get('set'), row['set']),
+        'version': (document.get('version'), row['version']),
+        'package.source_revision': (package.get('source_revision'), row['source_revision']),
+        'package.receipt_sha256': (package.get('receipt_sha256'), row['receipt_sha256']),
+        'package.archive_sha256': (package.get('archive_sha256'), row.get('archive_sha256', package.get('archive_sha256'))),
+        'built_over.pair': ((document.get('built_over') or {}).get('pair'), row['framework']['pair']),
+    }
+    for field, (found, wanted) in expected.items():
+        if found != wanted:
+            raise IndexError_(f'{args.range}: {field} {found}, the row of {row["release"]} says {wanted}')
+    value = {'sha256': hashlib.sha256(payload).hexdigest(), 'interface_sha256': interface}
+    if 'range' in row:
+        if row['range'] != value:
+            raise IndexError_(f'{row["release"]} already names another range ({row["range"]["sha256"]}): a row\'s range never changes')
+        print(json.dumps({'range': row['release'], 'unchanged': True, 'index': str(args.index)}))
+        return
+    row['range'] = value
+    found = problems(index)
+    if found:
+        raise IndexError_('the index would not hold:\n  ' + '\n  '.join(found))
+    write(args.index, index)
+    print(json.dumps({'range': row['release'], **value, 'index': str(args.index),
+                      'index_sha256': hashlib.sha256(Path(args.index).read_bytes()).hexdigest()}))
+
+
 def check(args):
     index = read(args.index)
     found = problems(index)
@@ -177,17 +239,22 @@ def check(args):
 
 def main():
     parser = argparse.ArgumentParser(description='Write and check the compatibility index of component sets.')
-    parser.add_argument('command', choices=['add', 'check'])
+    parser.add_argument('command', choices=['add', 'range', 'check'])
     parser.add_argument('--index', type=Path, required=True, help='index.json (created by add when missing)')
     parser.add_argument('--passport', type=Path, help='add: the stamped passport of the release')
     parser.add_argument('--lock', type=Path, help='add: the release lock')
     parser.add_argument('--published-on', help='add: the day the npm version was published (YYYY-MM-DD)')
+    parser.add_argument('--range', type=Path, help='range: the pair range file of an indexed release (set-pair-range.py write)')
     args = parser.parse_args()
     try:
         if args.command == 'add':
             if not (args.passport and args.lock and args.published_on and DATE.match(args.published_on)):
                 parser.error('add needs --passport, --lock and --published-on YYYY-MM-DD')
             add(args)
+        elif args.command == 'range':
+            if not args.range:
+                parser.error('range needs --range FILE')
+            add_range(args)
         else:
             check(args)
     except IndexError_ as error:
