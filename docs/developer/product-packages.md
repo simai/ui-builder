@@ -422,6 +422,21 @@ way without a rebuild: `set-pair-range.py write --repo <set> --release
 already there, the copy committed under `contracts/pair-ranges/`, and
 `set-index.py range`.
 
+A product package released with no lock (Pro: `package-pro.tar` and
+`package-receipt.json` on a `pro-<12>` release of simai/ui-pro) takes a range
+the same way: `set-pair-range.py write --receipt package-receipt.json
+--archive package-pro.tar --ui <ui>` proves the archive is the one the
+receipt names and reads the same interface with the same code. The document
+is the same schema with the same keys: `set` is the package name, `release`
+is `<package>-<first 12 hex of package_source.revision>`, `version` is null,
+and with no passport `core_runtime` is the `core.runtime` of the pair the
+package was built and tested over. `check --receipt package-receipt.json`
+(or a consumer's package release lock with `--lock`) proves the range
+describes that release. The package reference a pair publishes for it
+(`distr/core/contracts/packages/<name>.package.json`) is a registry record,
+not a runtime requirement; the range names it in `not_covered`. The range is
+uploaded as `pair-range.json` beside the release's other assets.
+
 ## SIMAI Framework Pro
 
 SIMAI Framework Pro is dropped; its four components move into Larena's package.

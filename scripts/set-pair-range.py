@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""The SIMAI Framework interface a released component set depends on, and the
-free pairs that keep it.
+"""The SIMAI Framework interface a released component set or product package
+depends on, and the free pairs that keep it.
 
 A component set release is built over one free pair (`ui-<12>`), and its
 package receipt names that pair. A consumer that pins exact pairs (Larena)
@@ -37,6 +37,19 @@ range when every requirement holds; the range of the release is the set of
 such pairs, not a list. The release, its receipt and its exact pair are
 untouched: an exact pin and a pair receipt stay valid as before.
 
+A product package released with no release lock (Pro: `pro-<12>` on
+simai/ui-pro, `package-pro.tar` beside `package-receipt.json`) takes a range
+the same way, read by the same code: the fields a lock gives a set come from
+the receipt (the release id is `<package>-<first 12 hex of
+package_source.revision>`, the version is null), the archive is proved to be
+the one the receipt names, and with no passport `core_runtime` is the
+core.runtime of the pair it was built and tested over. The range document is
+the same schema with the same keys (`set` holds the package name), so a
+consumer that accepts set ranges accepts it unchanged. The package reference
+a pair publishes for it (distr/core/contracts/packages/<name>.package.json)
+is a registry record, not runtime: it is not a requirement, and a range says
+so in `not_covered`.
+
 What a range does not cover (the reason it is a separate acceptance, chosen
 by the consumer, and never written into the release): behaviour behind an
 unchanged interface (a token's value, a free component's look, smart-base
@@ -48,19 +61,21 @@ control/evidence/2026-11-09-set-pair-range/proposal.md.
   write   The range of a release: from a set checkout (--repo, --release:
           the release lock at HEAD, the released output from its Build
           commit, proved to be the archive the lock names) or from a laid
-          output (--output DIR holding package-receipt.json, --lock FILE).
-          The interface is taken over the built-over pair and must hold
-          there.
+          output (--output DIR holding package-receipt.json, --lock FILE);
+          or a product package from its receipt and archive (--receipt FILE
+          --archive FILE). The interface is taken over the built-over pair
+          and must hold there.
   check   One or more pairs (--pair, repeated, or --all for every plain
-          release lock in the ui checkout) against a range; with --lock, the
-          range must also describe that very release. Exit 0 when every pair
+          release lock in the ui checkout) against a range; with --lock (or
+          --receipt, for a product package), the range must also describe
+          that very release. Exit 0 when every pair
           given is within, 1 when one is outside, 2 when the range is invalid.
 
 Usage:
-  set-pair-range.py write (--repo SET_CHECKOUT --release SET-12 | --output DIR --lock LOCK)
-      --ui UI [--as-of YYYY-MM-DD] [--to FILE]
+  set-pair-range.py write (--repo SET_CHECKOUT --release SET-12 | --output DIR --lock LOCK
+      | --receipt RECEIPT --archive TAR) --ui UI [--as-of YYYY-MM-DD] [--to FILE]
   set-pair-range.py check --range FILE --ui UI (--pair ui-12 ... | --all)
-      [--lock LOCK] [--as-of YYYY-MM-DD]
+      [--lock LOCK | --receipt RECEIPT] [--as-of YYYY-MM-DD]
 """
 import argparse
 import datetime
@@ -107,6 +122,8 @@ NOT_COVERED = [
     'the attributes, events and slots of the free elements the set renders (renamed only with dated aliases)',
     'window.SF reached through an alias the scan cannot see (const s = SF; s.x)',
 ]
+# A product package (no passport) is also not covered for the pair's record of it.
+NOT_COVERED_PACKAGE = 'the package reference the pair publishes (distr/core/contracts/packages/{name}.package.json): registry ids and documentation, not runtime'
 
 
 class RangeError(ValueError):
@@ -156,7 +173,7 @@ def read_lock(path, release=None):
     return lock
 
 
-def check_output_against_lock(output, lock):
+def check_output_against_lock(output, lock, is_set=True):
     """The laid output is the released one: package-receipt.json is the receipt
     the lock names, and the rest hashes to its manifest and file count."""
     receipt_path = Path(output) / 'package-receipt.json'
@@ -170,7 +187,7 @@ def check_output_against_lock(output, lock):
     if manifest != lock['output']['manifest_sha256'] or len(files) != lock['output']['files_count']:
         raise RangeError(f'{output} is not the released output of {lock["id"]} (manifest or file count)')
     receipt = json.loads(receipt_bytes)
-    if not receipt.get('set'):
+    if is_set and not receipt.get('set'):
         raise RangeError(f'{lock["id"]} is not a component set: its receipt has no set block')
     return receipt
 
@@ -195,6 +212,60 @@ def lay_release(repo, release, target):
     finally:
         shutil.rmtree(staging, ignore_errors=True)
     return lock
+
+
+def package_lock(receipt, receipt_sha256):
+    """The lock fields a range names, for a product package released as its
+    receipt and archive with no release lock."""
+    source = receipt.get('package_source') or {}
+    framework = receipt.get('framework') or {}
+    output = receipt.get('output') or {}
+    revision = str(source.get('revision') or '')
+    if not re.fullmatch(r'[0-9a-f]{40}', revision) or not re.fullmatch(r'[a-z][a-z0-9-]*', str(receipt.get('package'))):
+        raise RangeError('the receipt names no package and package_source.revision')
+    lock = {
+        'id': f'{receipt["package"]}-{revision[:12]}',
+        'package': receipt['package'],
+        'version': None,
+        'source': {'repository': source.get('repository'), 'revision': revision},
+        'build': {'revision': revision},
+        'receipt': {'sha256': receipt_sha256},
+        'output': {key: output.get(key) for key in ('manifest_sha256', 'archive_sha256', 'files_count')},
+        'requires': {'framework': framework.get('release'), 'source': (framework.get('source') or {}).get('revision')},
+    }
+    if not PAIR.match(str(lock['requires']['framework'])):
+        raise RangeError(f'{lock["id"]}: framework.release is not a free pair')
+    return lock
+
+
+def read_package_receipt(path):
+    receipt_bytes = Path(path).read_bytes()
+    receipt = json.loads(receipt_bytes)
+    if receipt.get('schema_id') != receipts.SCHEMA_ID or receipt.get('schema_version') != receipts.SCHEMA_VERSION:
+        raise RangeError(f'{path} is not a {receipts.SCHEMA_ID} v{receipts.SCHEMA_VERSION}')
+    if receipt.get('set'):
+        raise RangeError(f'{path} is the receipt of a component set: a set is released with a lock (--repo, or --output with --lock)')
+    return receipt, package_lock(receipt, sha(receipt_bytes))
+
+
+def lay_package(receipt_path, archive_path, target):
+    """The released output of a product package: its archive, proved to be
+    the one its receipt names, laid with the receipt beside it."""
+    receipt, lock = read_package_receipt(receipt_path)
+    archive = Path(archive_path).read_bytes()
+    if sha(archive) != lock['output']['archive_sha256']:
+        raise RangeError(f'{archive_path} is not the archive {lock["id"]} names (archive_sha256)')
+    staging = Path(tempfile.mkdtemp(prefix='set-pair-range-'))
+    try:
+        with tarfile.open(archive_path) as tar:
+            tar.extractall(staging / 'tree', filter='data')
+        shutil.move(str(staging / 'tree'), target)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    if (Path(target) / 'package-receipt.json').exists():
+        raise RangeError(f'{archive_path} carries a package-receipt.json of its own')
+    shutil.copyfile(receipt_path, Path(target) / 'package-receipt.json')
+    return lock, receipt
 
 
 # ---------------------------------------------------------------- the pair
@@ -284,7 +355,15 @@ def interface(output, receipt, built_over, as_of):
     relation the pair cannot resolve is a set's the passport requires, or
     the release is refused."""
     _, rules = receipts.read_rule_file(Path(output) / receipts.RULE_FILE)
-    passport = json.loads((Path(output) / receipts.SET_PASSPORT).read_text())
+    if receipt.get('set'):
+        passport = json.loads((Path(output) / receipts.SET_PASSPORT).read_text())
+    else:
+        # A product package has no passport: it needs at least the core.runtime
+        # of the pair it was built and tested over, and requires no set.
+        version = built_over.core_runtime()
+        if not re.fullmatch(r'\d+\.\d+\.\d+', str(version or '')):
+            raise RangeError(f'{built_over.id} publishes no core.runtime version in {CORE_PASSPORT}')
+        passport = {'framework': {'core_runtime': f'>={version}'}, 'requires_sets': []}
     core = receipt.get('core') or {}
     core_rule = core.get('rule')
     own = set(rules)
@@ -414,10 +493,15 @@ def write(args):
         if args.repo:
             output = Path(scratch) / 'released'
             lock = lay_release(Path(args.repo).resolve(), args.release, output)
+            receipt = check_output_against_lock(output, lock)
+        elif args.receipt:
+            output = Path(scratch) / 'released'
+            lock, _ = lay_package(args.receipt, args.archive, output)
+            receipt = check_output_against_lock(output, lock, is_set=False)
         else:
             output = Path(args.output)
             lock = read_lock(args.lock)
-        receipt = check_output_against_lock(output, lock)
+            receipt = check_output_against_lock(output, lock)
         built_over = Pair(args.ui, lock['requires']['framework'])
         requires, notes, expires = interface(output, receipt, built_over, as_of)
     own = check_pair(requires, built_over, as_of)
@@ -442,7 +526,7 @@ def write(args):
         'requires': requires,
         'interface_sha256': sha(canonical(requires)),
         'expires': expires,
-        'not_covered': NOT_COVERED,
+        'not_covered': NOT_COVERED if receipt.get('set') else [*NOT_COVERED, NOT_COVERED_PACKAGE.format(name=lock['package'])],
         'tooling': {
             'repository': 'simai/ui-builder',
             'revision': text(BUILDER_ROOT, 'rev-parse', 'HEAD'),
@@ -461,7 +545,7 @@ def write(args):
                       'counts': {key: len(value) for key, value in requires.items() if isinstance(value, list)}}))
 
 
-def read_range(path, lock_path=None):
+def read_range(path, lock_path=None, receipt_path=None):
     try:
         document = json.loads(Path(path).read_text())
     except (OSError, ValueError) as error:
@@ -472,8 +556,8 @@ def read_range(path, lock_path=None):
         raise RangeError(f'{path} is not a {SCHEMA} v{SCHEMA_VERSION}')
     if sha(canonical(document['requires'])) != document.get('interface_sha256'):
         raise RangeError(f'{path}: interface_sha256 is not the digest of its requires')
-    if lock_path:
-        lock = read_lock(lock_path)
+    if lock_path or receipt_path:
+        lock = read_lock(lock_path) if lock_path else read_package_receipt(receipt_path)[1]
         expected = {
             'release': lock['id'], 'set': lock['package'], 'version': lock['version'],
             'package.receipt_sha256': lock['receipt']['sha256'], 'package.archive_sha256': lock['output']['archive_sha256'],
@@ -491,7 +575,7 @@ def read_range(path, lock_path=None):
 
 def check(args):
     as_of = args.as_of or today()
-    document = read_range(args.range, args.lock)
+    document = read_range(args.range, args.lock, args.receipt)
     if args.all:
         pairs = sorted(match.group(1) for path in (Path(args.ui) / 'contracts/releases').iterdir()
                        if (match := PAIR_LOCK.match(path.name)))
@@ -518,6 +602,8 @@ def main():
     writing.add_argument('--release', help='with --repo: the release, <set>-<12 hex>')
     writing.add_argument('--output', help='the laid released output (set.json, smart/, package-receipt.json)')
     writing.add_argument('--lock', help='with --output: the release lock')
+    writing.add_argument('--receipt', help='a product package released with no lock (Pro): its package-receipt.json')
+    writing.add_argument('--archive', help='with --receipt: the package archive it names (package-pro.tar)')
     writing.add_argument('--ui', required=True, help='a ui checkout holding the built-over pair')
     writing.add_argument('--as-of', help='the date forwards must be live on; default: today, UTC')
     writing.add_argument('--to', help='default: pair-range-<release>.json here')
@@ -527,14 +613,19 @@ def main():
     checking.add_argument('--pair', action='append', default=[])
     checking.add_argument('--all', action='store_true', help='every plain ui-<12> release lock of the ui checkout')
     checking.add_argument('--lock', help='the release lock the range must describe')
+    checking.add_argument('--receipt', help='or, for a product package with no lock, the receipt the range must describe')
     checking.add_argument('--as-of')
     args = parser.parse_args()
     if getattr(args, 'as_of', None) is not None and not DATE.match(args.as_of):
         parser.error('--as-of takes a date, YYYY-MM-DD')
-    if args.command == 'write' and bool(args.repo) == bool(args.output):
-        parser.error('write takes --repo with --release, or --output with --lock')
-    if args.command == 'write' and ((args.repo and not args.release) or (args.output and not args.lock)):
-        parser.error('write takes --repo with --release, or --output with --lock')
+    usage = 'write takes --repo with --release, --output with --lock, or --receipt with --archive'
+    if args.command == 'write' and sum(map(bool, (args.repo, args.output, args.receipt))) != 1:
+        parser.error(usage)
+    if args.command == 'write' and ((args.repo and not args.release) or (args.output and not args.lock)
+                                    or (args.receipt and not args.archive) or (args.archive and not args.receipt)):
+        parser.error(usage)
+    if args.command == 'check' and args.lock and args.receipt:
+        parser.error('check takes --lock or --receipt, not both')
     if args.command == 'check' and bool(args.pair) == args.all:
         parser.error('check takes --pair (repeated) or --all')
     try:

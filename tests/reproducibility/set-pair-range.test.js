@@ -346,3 +346,134 @@ test("write from a set checkout reads the released output at the Build commit", 
     assert.equal(range.package.build_revision, build);
     assert.equal(range.interface_sha256, JSON.parse(fs.readFileSync(writeRange(ui, laid).to, "utf8")).interface_sha256);
 });
+
+// A product package released with no lock (Pro: package-pro.tar beside
+// package-receipt.json on a pro-<12> release). Its range is the same document,
+// read by the same code; the receipt gives what a lock gives a set.
+const PRO_RULES = {
+    "cl-fx-board": {
+        css: true, js: true, mode: "smart", tags: ["sf-fx-board", "sf-fx-old-board"], type: "smart",
+        relation: [{ name: "cl-empty-state" }, { name: "cl-buttons" }, { name: "cl-fx-cell" }],
+    },
+    "cl-fx-cell": { css: true, js: false, mode: "smart", tags: ["sf-fx-cell"], type: "smart" },
+};
+
+function proRelease(pair, { rules = PRO_RULES, receiptExtra = {} } = {})
+{
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "range-pro-"));
+    const output = path.join(work, "tree");
+    write(output, "smart/rule.js", renderPackageRuleFile("pro", rules));
+    write(output, "smart/fx-board/js/fx-board.js", SET_JS);
+    write(output, "smart/fx-board/css/fx-board.css", SET_CSS.replaceAll("fx-gauge", "fx-board"));
+    write(output, "smart/fx-cell/css/fx-cell.css", ".sf-fx-cell{--sf-fx-own-css:1}\n");
+    const files = filesUnder(output);
+    const archive = path.join(work, "package-pro.tar");
+    const packed = spawnSync("python3", ["-I", "-c",
+        "import sys,tarfile\nwith tarfile.open(sys.argv[1],'w',format=tarfile.USTAR_FORMAT) as t: t.add(sys.argv[2],arcname='smart')",
+        archive, path.join(output, "smart")], { encoding: "utf8" });
+    assert.equal(packed.status, 0, packed.stderr);
+    const receipt = {
+        schema_id: "simai.framework.product-package-receipt",
+        schema_version: 1,
+        package: "pro",
+        package_source: { repository: "simai/ui-pro", revision: hex("e", 40), path: "components", tree: hex("4", 40) },
+        framework: { source: { repository: "simai/ui-source", revision: hex("c", 40) }, release: pair,
+            runtime: { abi: 1, modules: { lit: ["html"], "smart-base": ["default"] } } },
+        output: { runtime_path: "smart", files_count: files.length, manifest_sha256: sha256(`${JSON.stringify(files)}\n`),
+            archive: "package-pro.tar", archive_sha256: sha256(fs.readFileSync(archive)) },
+        claims: { production_ready: false },
+        ...receiptExtra,
+    };
+    write(work, "package-receipt.json", receipt);
+    return { work, archive, receiptPath: path.join(work, "package-receipt.json"), receipt };
+}
+
+function writeProRange(ui, release, extra = [])
+{
+    const to = path.join(release.work, "pair-range.json");
+    const result = run(["write", "--receipt", release.receiptPath, "--archive", release.archive, "--ui", ui, "--as-of", "2026-11-09", "--to", to, ...extra]);
+    return { result, to };
+}
+
+test("write: a product package from its receipt and archive, the core.runtime floor its own pair's", () => {
+    const ui = newUi();
+    const pair = addPair(ui, { version: "1.45.0" });
+    const release = proRelease(pair);
+    const { result, to } = writeProRange(ui, release);
+    assert.equal(result.status, 0, result.stderr);
+    const range = JSON.parse(fs.readFileSync(to, "utf8"));
+    // The same document a set has, with the same keys.
+    assert.deepEqual(Object.keys(range).sort(), ["built_over", "claims", "created_on", "expires", "interface_sha256", "not_covered",
+        "package", "release", "repository", "requires", "schema", "schema_version", "set", "tooling", "version"]);
+    assert.equal(range.set, "pro");
+    assert.equal(range.release, `pro-${hex("e", 12)}`);
+    assert.equal(range.version, null);
+    assert.equal(range.repository, "simai/ui-pro");
+    assert.deepEqual(range.package, {
+        source_revision: hex("e", 40), build_revision: hex("e", 40),
+        receipt_sha256: sha256(fs.readFileSync(release.receiptPath)), manifest_sha256: release.receipt.output.manifest_sha256,
+        archive_sha256: release.receipt.output.archive_sha256, files_count: release.receipt.output.files_count,
+    });
+    assert.deepEqual(range.built_over.source_revision, hex("c", 40));
+    assert.deepEqual(range.requires, {
+        core_runtime: ">=1.45.0",
+        runtime: { abi: 1, modules: { lit: ["html"], "smart-base": ["default"] } },
+        relations: [{ name: "cl-buttons", resolves_to: "cl-buttons" }, { name: "cl-empty-state", resolves_to: "cl-empty-state" }],
+        // No package core: every tag, its former ones too.
+        elements: ["sf-fx-board", "sf-fx-cell", "sf-fx-old-board"],
+        free_elements: ["sf-button", "sf-empty-state"],
+        core_folder: null,
+        variables: ["--sf-a2", "--sf-space-1"],
+        js_api: ["RuleLoader", "format.number", "runtimeModule"],
+    });
+    assert.equal(range.interface_sha256, sha256(JSON.stringify(sortKeys(range.requires))));
+    assert.match(range.not_covered.at(-1), /packages\/pro\.package\.json/u);
+});
+
+test("check: a product package range against later pairs, its receipt, and a consumer's package lock", () => {
+    const ui = newUi();
+    const pair = addPair(ui, { version: "1.45.0" });
+    const release = proRelease(pair);
+    const { to } = writeProRange(ui, release);
+    const later = addPair(ui, { version: "1.46.0", css: ":root{--sf-space-1:6px;--sf-a2:#456;--sf-new:1}\n" });
+    const older = addPair(ui, { version: "1.44.0" });
+    const { result, value } = checkPairs(ui, to, [pair, later, older], ["--receipt", release.receiptPath]);
+    assert.equal(result.status, 1, result.stderr);
+    assert.deepEqual(value.pairs.map((item) => [item.pair, item.status]), [[pair, "within"], [later, "within"], [older, "outside"]]);
+    assert.match(value.pairs[2].problems.join("\n"), /core_runtime: .* runs 1\.44\.0, the set needs >=1\.45\.0/u);
+
+    // A consumer that pins packages by lock (Larena) describes the release as a package release lock.
+    const range = JSON.parse(fs.readFileSync(to, "utf8"));
+    const consumerLock = {
+        schema: "simai.framework.package-release-lock", schema_version: 1, id: range.release, package: "pro", version: null,
+        source: { repository: "simai/ui-pro", revision: hex("e", 40) }, receipt: { sha256: range.package.receipt_sha256 },
+        output: { manifest_sha256: range.package.manifest_sha256, archive_sha256: range.package.archive_sha256 },
+        requires: { framework: pair },
+    };
+    write(release.work, "consumer-lock.json", consumerLock);
+    assert.equal(checkPairs(ui, to, [later], ["--lock", path.join(release.work, "consumer-lock.json")]).result.status, 0);
+
+    const other = proRelease(pair, { receiptExtra: { package_source: { ...release.receipt.package_source, revision: hex("f", 40) } } });
+    const refused = run(["check", "--range", to, "--ui", ui, "--pair", pair, "--receipt", other.receiptPath]);
+    assert.equal(refused.status, 2);
+    assert.match(refused.stderr, /release pro-e{12}, the lock says pro-f{12}/u);
+});
+
+test("write refuses a package archive its receipt does not name, and a set receipt without a lock", () => {
+    const ui = newUi();
+    const pair = addPair(ui, { version: "1.45.0" });
+    const release = proRelease(pair);
+    fs.appendFileSync(release.archive, "x");
+    const changed = writeProRange(ui, release).result;
+    assert.equal(changed.status, 2);
+    assert.match(changed.stderr, /is not the archive pro-e{12} names/u);
+
+    const set = proRelease(pair, { receiptExtra: { set: { id: "pro" } } });
+    const asSet = writeProRange(ui, set).result;
+    assert.equal(asSet.status, 2);
+    assert.match(asSet.stderr, /a set is released with a lock/u);
+
+    const usage = run(["write", "--receipt", release.receiptPath, "--ui", ui]);
+    assert.equal(usage.status, 2);
+    assert.match(usage.stderr, /--receipt with --archive/u);
+});
