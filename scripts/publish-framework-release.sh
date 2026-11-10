@@ -105,7 +105,10 @@ if [ -n "$LINKAGE" ]; then
     inventories="$(git -C "$UI" ls-tree --name-only HEAD contracts/releases/ | grep '\.inventory\.json$' || true)"
     if [ -n "$inventories" ]; then
         for writer in $(git -C "$UI" log --format=%H HEAD -- distr); do
-            if printf '%s\n' "$inventories" | grep -qxF "contracts/releases/ui-${writer:0:12}.inventory.json"; then
+            # A here-string, not a pipe: grep -q exits at the first match, and under
+            # pipefail the writer's SIGPIPE (141) would read as "no inventory" and
+            # pick an older release as the base of the change report.
+            if grep -qxF "contracts/releases/ui-${writer:0:12}.inventory.json" <<<"$inventories"; then
                 PREVIOUS_ID="ui-${writer:0:12}"
                 PREVIOUS_INVENTORY="$WORK/$PREVIOUS_ID.inventory.json"
                 git -C "$UI" show "HEAD:contracts/releases/$PREVIOUS_ID.inventory.json" > "$PREVIOUS_INVENTORY"
