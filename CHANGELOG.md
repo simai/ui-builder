@@ -6,6 +6,12 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Added
 
+- A language file's script form ships (2026-11-17, ui-source owner decision
+  C282: Russian is a language file). `materializeSourceAssets` copies
+  `core/lang/<code>.js` (`LANGUAGE_SCRIPT` in `libs/generatedPackaging.js`)
+  beside the JSON parts into `distr/core/lang/`, so a page can include
+  `core/lang/ru.js` before core. No other core script under `src/` is shipped
+  as a source asset.
 - Set release assets (2026-11-08): the set release route lays
   `package-<set>.tar` beside `package-<set>-<12>.tar`, the same bytes (the
   name Larena fetches, as `package-pro.tar` on a Pro release), with

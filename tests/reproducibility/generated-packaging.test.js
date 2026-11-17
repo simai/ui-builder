@@ -447,6 +447,28 @@ test("what a shipped module imports by a relative path ships with it", () => {
     assert.ok(copied.some((file) => file.endsWith("page-language.js")));
 });
 
+test("a language file's script form ships beside its JSON parts (C282), other core scripts stay unshipped", () => {
+    const { materializeSourceAssets } = require("../../libs/generatedPackaging");
+    const sourceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "lang-src-"));
+    const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), "lang-out-"));
+    fs.mkdirSync(path.join(sourceRoot, "core/lang/ru"), { recursive: true });
+    fs.mkdirSync(path.join(sourceRoot, "core/js"), { recursive: true });
+    fs.writeFileSync(path.join(sourceRoot, "core/index.js"), "");
+    fs.writeFileSync(path.join(sourceRoot, "core/lang/ru.js"), "(function () {})();\n");
+    fs.writeFileSync(path.join(sourceRoot, "core/lang/pt-br.js"), "(function () {})();\n");
+    fs.writeFileSync(path.join(sourceRoot, "core/lang/ru/core.json"), "{}\n");
+    fs.writeFileSync(path.join(sourceRoot, "core/lang/helper.mjs"), "export {};\n");
+    fs.writeFileSync(path.join(sourceRoot, "core/lang/ru/core.js"), "(function () {})();\n");
+    fs.writeFileSync(path.join(sourceRoot, "core/js/other.js"), "export {};\n");
+    materializeSourceAssets({ sourceRoot, outputRoot, entries: [{ key: "core", target: "core", input: path.join(sourceRoot, "core/index.js") }] });
+    assert.ok(fs.existsSync(path.join(outputRoot, "core/lang/ru.js")), "the script form ships");
+    assert.ok(fs.existsSync(path.join(outputRoot, "core/lang/pt-br.js")), "a language with a region ships");
+    assert.ok(fs.existsSync(path.join(outputRoot, "core/lang/ru/core.json")), "a JSON part ships");
+    assert.ok(!fs.existsSync(path.join(outputRoot, "core/lang/ru/core.js")), "a script below a language folder does not");
+    assert.ok(!fs.existsSync(path.join(outputRoot, "core/lang/helper.mjs")), "a module does not");
+    assert.ok(!fs.existsSync(path.join(outputRoot, "core/js/other.js")), "a core script outside core/lang does not");
+});
+
 test("a host port's conformance kit ships whole and its digest recomputes without the .gz files", () => {
     const subject = fixture();
     const edition = "core/contracts/ports/simai.example-port/1.0.0/";
