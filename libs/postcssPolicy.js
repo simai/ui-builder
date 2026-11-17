@@ -49,6 +49,10 @@ function createPostcssPresetEnvOptions(options = {})
             // :has() stays native: its polyfill needs a script no page loads,
             // so the rewritten [\:has\(...\)] selectors would be dead bytes.
             "has-pseudo-class": false,
+            // break-before/after/inside stay native: postcss-page-break wrote
+            // a page-break-* duplicate beside each of them, a second rule per
+            // break utility that every supported browser ignores.
+            "break-properties": false,
             [LOGICAL_PROPERTIES_FEATURE]: {
                 ...logicalFeature,
                 preserve: true,

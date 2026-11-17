@@ -334,3 +334,20 @@ test("late fallback cleanup does not cross media or layer boundaries", async () 
     assert.match(result.css, /@media[^}]+border-top-left-radius: 4px/);
     assert.match(result.css, /@layer[^}]+border-top-left-radius: 4px/);
 });
+
+test("break-* utilities stay break-* alone: no page-break-* duplicates", async () => {
+    // postcss-preset-env's break-properties feature (postcss-page-break) wrote
+    // page-break-before/after/inside beside every break-* declaration, so the
+    // built break utilities carried two rules each for a property every
+    // supported browser reads natively.
+    const options = policyOptions();
+    assert.equal(options.features["break-properties"], false);
+    const input = ".break-before-page { break-before: page; }\n"
+        + ".break-after-avoid { break-after: avoid; }\n"
+        + ".break-inside-avoid { break-inside: avoid; }";
+    const result = await transform(input);
+    assert.doesNotMatch(result.css, /page-break-/);
+    assert.match(result.css, /break-before: page/);
+    assert.match(result.css, /break-after: avoid/);
+    assert.match(result.css, /break-inside: avoid/);
+});
