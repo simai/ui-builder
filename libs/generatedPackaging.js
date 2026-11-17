@@ -30,6 +30,12 @@ const GZIP_EXTENSIONS = Object.freeze(new Set([
     ".mjs",
     ".svg",
 ]));
+// A language file in its script form (owner decision C282, ui-source
+// scripts/build-language-packs.mjs): core/lang/<code>.js, a classic script a
+// page includes before core.js so its words are there before the first paint,
+// offline and in a one-file build too. Shipped as source, like the JSON parts
+// beside it.
+const LANGUAGE_SCRIPT = /^core\/lang\/[a-z]{2,3}(?:-[a-z0-9]{2,8})*\.js$/u;
 const NORMALIZED_TEXT_EXTENSIONS = Object.freeze(new Set([
     ".js",
     ".mjs",
@@ -355,7 +361,8 @@ function materializeSourceAssets(plan)
             if (!SOURCE_ASSET_EXTENSIONS.has(extension) && !normativeAssets.has(canonicalSource)
                 && !kitRoots.some((kitRoot) => isWithin(kitRoot, canonicalSource))
                 && !(extension === ".mjs"
-                    && /^core\/js\/(?:composition|assembly)\/[A-Za-z0-9._-]+\.mjs$/u.test(portableRelativePath)))
+                    && /^core\/js\/(?:composition|assembly)\/[A-Za-z0-9._-]+\.mjs$/u.test(portableRelativePath))
+                && !(extension === ".js" && LANGUAGE_SCRIPT.test(portableRelativePath)))
             {
                 continue;
             }
