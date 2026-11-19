@@ -158,6 +158,25 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Changed
 
+- Layered sheets carry no copies their browsers never apply (2026-11-19,
+  sheet weight; Docara reported component sheets doubled between
+  ui-141822273efe and ui-dc9fc39aeb26). Every component rule stands in
+  `@layer`, which only Chrome 99, Safari 15.4 and Firefox 97 and later read.
+  `libs/postcssPolicy.js` turns off preset-env's `is-pseudo-class`: it wrote
+  one rule per member of each `:is()` list (the product of the lists in a
+  compound, padded with `:not(.does-not-exist)`), and the direction copies
+  then tripled each, so a source `:is()` of three members grew a rule by up to
+  nine. `libs/postcssLateLogicalFallbacks.js` writes no IE copy
+  (`_:-ms-input-placeholder, ...`) and no `@supports not (<logical>)` copy for
+  a layered rule (float and clear `inline-*`, Chrome 118, keep theirs), and
+  drops a layered declaration written again below with `var()` (that one
+  always wins where custom properties exist). Unlayered rules keep every
+  legacy copy. On ui-source integration/pair-next-16 0224027ea all built CSS
+  went from 39.8 MB to 21.6 MB (`menu.min.css` 566530 -> 123983,
+  `buttons.min.css` 535598 -> 114938, `core.css` 502285 -> 412272); every
+  other file is byte-identical, and the computed style of every element of
+  the Smart examples and smoke pages is unchanged (1440/390, light/dark).
+
 - Migrated the independently accepted `sf5.webpack@d4d151c` builder to
   `simai/ui-builder` without rewriting the target repository history.
 - Repaired `full.build.js` to use the existing Core, Component, and Utility

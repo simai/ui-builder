@@ -234,6 +234,65 @@ function logicalSupport(declaration, direction)
     return null;
 }
 
+// A rule inside @layer is read only by a browser that reads cascade layers:
+// Chrome 99, Safari 15.4, Firefox 97 and later. Every such browser has the
+// logical spacing, border, inset and radius properties and custom
+// properties, and none of them is IE, so the IE selector and those @supports
+// fallbacks of a layered rule are bytes no browser applies. float and clear
+// inline-start/inline-end came in Chrome 118, so their fallback stays.
+const LAYER_BASELINE_LACKS = /^(?:float|clear): inline-/;
+
+function inCascadeLayer(node)
+{
+    for (let parent = node.parent; parent && parent.type !== "root"; parent = parent.parent)
+    {
+        if (parent.type === "atrule" && parent.name.toLowerCase() === "layer")
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// preset-env writes a resolved copy of a declaration before the one that
+// reads var() (custom-properties, preserve). A value with var() is valid when
+// the sheet is parsed, so in a browser with custom properties the later
+// declaration always replaces the copy: if the variable is missing, the
+// property becomes unset, not the copy's value. Inside @layer (see above)
+// the copy is never used.
+function pruneLayeredVarCopies(root)
+{
+    root.walkRules(rule => {
+        if (!inCascadeLayer(rule))
+        {
+            return;
+        }
+
+        const declarations = declarationNodes(rule);
+
+        for (let index = 0; index < declarations.length - 1; index += 1)
+        {
+            const declaration = declarations[index];
+
+            if (declaration.prop.startsWith("--"))
+            {
+                continue;
+            }
+
+            const replaced = declarations.slice(index + 1).some(later =>
+                later.prop.toLowerCase() === declaration.prop.toLowerCase()
+                && (later.important || !declaration.important)
+                && /var\(/i.test(later.value));
+
+            if (replaced)
+            {
+                declaration.remove();
+            }
+        }
+    });
+}
+
 function addLegacyFallbacks(root, { legacyDirection, postcss, result })
 {
     const rules = [];
@@ -257,11 +316,19 @@ function addLegacyFallbacks(root, { legacyDirection, postcss, result })
             // Reuse the existing preset dependency; never implement another selector converter.
             legacyDirection.Rule(fallback, { result });
             fallback.selector = normalizeSelectorLineEnds(fallback.selector);
+            const layered = inCascadeLayer(rule);
             // IE 10/11 has no @supports. This recognized IE pseudo-class makes the
             // whole selector list invalid elsewhere, keeping it out of modern cascades.
-            rule.before(fallback.clone({ selector: `_:-ms-input-placeholder, ${fallback.selector}` }));
-            rule.before(postcss.atRule({ name: "supports", params: `not (${condition})` })
-                .append(fallback));
+            // IE reads no @layer, so a layered rule gets no IE copy.
+            if (!layered)
+            {
+                rule.before(fallback.clone({ selector: `_:-ms-input-placeholder, ${fallback.selector}` }));
+            }
+            if (!layered || LAYER_BASELINE_LACKS.test(condition))
+            {
+                rule.before(postcss.atRule({ name: "supports", params: `not (${condition})` })
+                    .append(fallback));
+            }
         }
         if (groups.size > 0)
         {
@@ -326,6 +393,7 @@ function createLateLogicalFallbackCleanup()
             });
 
             addLegacyFallbacks(root, { legacyDirection, postcss, result });
+            pruneLayeredVarCopies(root);
         },
     };
 }
@@ -334,4 +402,5 @@ createLateLogicalFallbackCleanup.postcss = true;
 
 module.exports = createLateLogicalFallbackCleanup;
 module.exports.varFallback = varFallback;
+module.exports.inCascadeLayer = inCascadeLayer;
 module.exports.builderDependencyRoot = builderDependencyRoot;

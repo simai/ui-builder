@@ -351,3 +351,39 @@ test("break-* utilities stay break-* alone: no page-break-* duplicates", async (
     assert.match(result.css, /break-after: avoid/);
     assert.match(result.css, /break-inside: avoid/);
 });
+
+test("a layered rule keeps no IE copy, no baseline @supports copy and no var() copy", async () => {
+    const layered = await transform(`@layer sf.components { ${FIXTURE} .float { float: inline-start; } .tokens { --space: 2px; padding-block: 1px; padding-block: var(--space, 3px); } }`);
+    const ie = [];
+    const featureQueries = [];
+    layered.root.walkRules(rule => {
+        if (rule.selector.startsWith("_:-ms-input-placeholder,")) ie.push(rule);
+        if (rule.parent.type === "atrule" && rule.parent.name === "supports") featureQueries.push(rule);
+    });
+    assert.equal(ie.length, 0, "a browser that reads @layer is never IE");
+    // float: inline-start came in Chrome 118, after @layer (99): that copy stays.
+    assert.ok(featureQueries.length > 0);
+    for (const rule of featureQueries) assert.match(rule.parent.params, /^not \((float|clear): inline-/);
+    layered.root.walkRules(rule => {
+        const seen = new Set();
+        for (const node of rule.nodes.filter(item => item.type === "decl" && !item.prop.startsWith("--")))
+        {
+            assert.ok(!seen.has(node.prop), `${rule.selector} repeats ${node.prop}`);
+            seen.add(node.prop);
+        }
+    });
+    assert.match(layered.css, /:where\(:dir\(ltr\)\)/);
+    assert.match(layered.css, /padding-block:\s*var\(--space, 3px\)/);
+    assert.doesNotMatch(layered.css, /padding-block:\s*1px/);
+    // The same rules outside a layer keep every legacy copy.
+    const plain = await transform(`${FIXTURE} .tokens { padding-block: 1px; padding-block: var(--space, 3px); }`);
+    assert.match(plain.css, /_:-ms-input-placeholder,/);
+    assert.match(plain.css, /@supports not \(margin-inline-start: initial\)/);
+    assert.match(plain.css, /padding-block:\s*1px/);
+});
+
+test(":is() stays native", async () => {
+    const result = await transform("@layer sf.components { .a:is(.b, .c):is(.d, .e) .f { color: red; } }");
+    assert.match(result.css, /\.a:is\(\.b, \.c\):is\(\.d, \.e\) \.f/);
+    assert.doesNotMatch(result.css, /does-not-exist/);
+});

@@ -49,6 +49,14 @@ function createPostcssPresetEnvOptions(options = {})
             // :has() stays native: its polyfill needs a script no page loads,
             // so the rewritten [\:has\(...\)] selectors would be dead bytes.
             "has-pseudo-class": false,
+            // :is() stays native: postcss-is-pseudo-class wrote one rule per
+            // member of every :is() list (the product of the lists in a
+            // compound, each padded with :not(.does-not-exist)), and the
+            // logical fallbacks then tripled each copy. Every component rule
+            // stands in @layer, and a browser that reads @layer (Chrome 99,
+            // Safari 15.4, Firefox 97) reads :is() (Chrome 88, Safari 14,
+            // Firefox 78); complex members were already left native.
+            "is-pseudo-class": false,
             // break-before/after/inside stay native: postcss-page-break wrote
             // a page-break-* duplicate beside each of them, a second rule per
             // break utility that every supported browser ignores.
