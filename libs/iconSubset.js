@@ -247,6 +247,16 @@ function cssAxisRange(values)
     return values.length === 1 ? String(values[0]) : `${values[0]} ${values.at(-1)}`;
 }
 
+// The point an icon without its own value draws at: the axis default, inside
+// the kept range. The range's first value drew a page without a theme class at
+// grade -25 and opsz 20 once grad -25..0 and opsz 20..48 were kept.
+function cssAxisDefault(axes, name)
+{
+    const values = axes[name];
+    const { defaultValue } = AXIS_CONTRACTS[name];
+    return Math.max(values[0], Math.min(values.at(-1), defaultValue));
+}
+
 function buildCss({ axes, contract, fontFamily, fontUrl })
 {
     return `@font-face {\n`
@@ -261,10 +271,10 @@ function buildCss({ axes, contract, fontFamily, fontUrl })
         + `  font-family: '${fontFamily}';\n`
         + `  font-feature-settings: 'liga';\n`
         + `  font-variation-settings: `
-        + `'FILL' var(--sf-icon--fill, ${axes.FILL[0]}), `
-        + `'wght' var(--sf-icon--weight, ${axes.wght[0]}), `
-        + `'GRAD' var(--sf-icon--grade, ${axes.GRAD[0]}), `
-        + `'opsz' var(--sf-icon--optical-size, ${axes.opsz[0]});\n`
+        + `'FILL' var(--sf-icon--fill, ${cssAxisDefault(axes, "FILL")}), `
+        + `'wght' var(--sf-icon--weight, ${cssAxisDefault(axes, "wght")}), `
+        + `'GRAD' var(--sf-icon--grade, ${cssAxisDefault(axes, "GRAD")}), `
+        + `'opsz' var(--sf-icon--optical-size, ${cssAxisDefault(axes, "opsz")});\n`
         + `}\n`;
 }
 

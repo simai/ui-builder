@@ -75,3 +75,17 @@ An existing `icons.simai.io` deployment can keep its `/ms/css` API by calling
 adapter parses the legacy query, delegates to the same generator and returns
 CSS plus the `X-SIMAI-Font-Manifest` header and WOFF2 bytes. It is an adapter,
 not a second generator or a second icon registry.
+
+The adapter reads the query as simai/ui-icons 0.2.0 does: `weight` (or
+`wght`), `fill`, `grad`, `opsz`, each one number, a list (`-25,0`) or a range
+(`20..48`), clamped to the Material Symbols design space (GRAD -25..200, opsz
+20..48). A list or a range keeps the axis variable over its span; the SIMAI
+Framework asks for `grad=-25..0` and `opsz=20..48` on every page and each icon
+picks its point with `font-variation-settings`. `fill=1` keeps FILL 0..1, as the
+service does (`fill=only` keeps 1 alone). The old names `grade`,
+`optical_size`, `optical-size` and `opticalsize` are aliases until 2027-01-01,
+widened to the page range (`grade=200` reads as `grad=-25..200`); the new name
+wins when a query carries both. A source font without an axis (the
+static-weight `@material-symbols/font-*` packages keep FILL only) draws that
+axis at its default instead of refusing the query; the response lists such
+axes in `pinnedAxes`.
