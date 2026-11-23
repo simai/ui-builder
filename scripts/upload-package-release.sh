@@ -76,7 +76,13 @@ if [ "$DRY_RUN" = 1 ]; then
 fi
 gh release view "$RELEASE" -R "$GITHUB" >/dev/null 2>&1 && fail "$GITHUB already has a release $RELEASE: a release is never rewritten"
 gh api "repos/$GITHUB/commits/$TARGET" >/dev/null 2>&1 || fail "$GITHUB has no commit $TARGET: push the Bind commit first"
-TAGGED="$(gh api "repos/$GITHUB/git/ref/tags/$RELEASE" --jq .object.sha 2>/dev/null || true)"
+# A missing tag answers 404 with a JSON body; read the sha only from a found ref.
+TAGGED=''
+if REF_JSON="$(gh api "repos/$GITHUB/git/ref/tags/$RELEASE" 2>/dev/null)"; then
+    TAGGED="$(printf '%s' "$REF_JSON" | python3 -c 'import json,sys
+try: print(json.load(sys.stdin).get("object",{}).get("sha",""))
+except Exception: print("")')"
+fi
 [ -z "$TAGGED" ] || [ "$TAGGED" = "$TARGET" ] || fail "tag $RELEASE already points at $TAGGED, not $TARGET"
 "${CREATE[@]}"
 "${ASSETS_TOOL[@]}" check --github "$GITHUB" --release "$RELEASE" ${LOCK_ARGS[@]+"${LOCK_ARGS[@]}"} \
