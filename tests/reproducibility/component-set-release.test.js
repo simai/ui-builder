@@ -281,6 +281,17 @@ test("the generic route lays the build, binds the lock, passes its gate and neve
     for (const name of [`package-${id}.tar`, "package-fx.tar", "package-fx.tar.sha256", "package-receipt.json", `set-${id}.json`]) {
         assert.ok(dry.stdout.includes(path.join(assets, name)), `the release carries ${name}`);
     }
+    // The tag goes on the Bind commit, never on the default branch head.
+    const bindSha = "a".repeat(40);
+    const targeted = run("bash", [UPLOAD, "--assets", assets, "--release", id, "--github", "example/ui-fx", "--lock", lockPath, "--target", bindSha, "--dry-run"]);
+    assert.equal(targeted.status, 0, targeted.stderr);
+    assert.ok(targeted.stdout.includes(`--target ${bindSha}`), "the release is created on the given commit");
+    const untargeted = run("bash", [UPLOAD, "--assets", assets, "--release", id, "--github", "example/ui-fx", "--lock", lockPath]);
+    assert.notEqual(untargeted.status, 0);
+    assert.match(untargeted.stderr, /--target <bind commit sha> is required/u);
+    const shortTarget = run("bash", [UPLOAD, "--assets", assets, "--release", id, "--github", "example/ui-fx", "--target", "abc123", "--dry-run"]);
+    assert.notEqual(shortTarget.status, 0);
+    assert.match(shortTarget.stderr, /full 40-character commit sha/u);
 
     // A byte changed in the release output after the bind reds the gate.
     fs.writeFileSync(path.join(repo, "package/dist/smart/rule.js"), "// changed\n");

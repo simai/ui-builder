@@ -167,6 +167,6 @@ printf '\nRELEASE %s version=%s build=%s bind=%s source=%s builder=%s receipt=%s
     "$ID" "$VERSION" "${BUILD:0:12}" "$(git -C "$REPO" rev-parse --short=12 HEAD)" "${SOURCE_REVISION:0:12}" \
     "${BUILDER_REVISION:0:12}" "$WORK/package-receipt.json" "$WORK/set.json"
 printf 'ASSETS %s\n' "$WORK/assets"
-printf 'Nothing was pushed. After review: scripts/upload-package-release.sh --assets %q --release %s --github <owner/repo>\n' \
-    "$WORK/assets" "$ID"
+printf 'Nothing was pushed. After review: scripts/upload-package-release.sh --assets %q --release %s --github <owner/repo> --target %s\n' \
+    "$WORK/assets" "$ID" "$(git -C "$REPO" rev-parse HEAD)"
 

@@ -375,7 +375,9 @@ a published release) refuses two archives that are not the same bytes, a
 `.sha256` that does not name the archive, and an archive that is not the
 receipt's (or, with `--lock`, the lock's) `archive_sha256`.
 `scripts/upload-package-release.sh --assets <work>/assets --release <set>-<12>
---github <owner/repo>` creates the release from them after review, refuses a
+--github <owner/repo> --target <bind commit sha>` creates the release from them
+after review, tags the Bind commit (never the default branch head; `--target` is
+required outside `--dry-run`), refuses a
 tag that already has a release, and checks every asset again after
 downloading it back; `--dry-run` prints the `gh` command instead.
 
