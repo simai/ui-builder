@@ -189,6 +189,13 @@ All notable changes to `ui-builder` are documented in this file.
 
 ### Fixed
 
+- `sf-build package` (and `sf-build receipt --out`) lays a component set
+  (2026-11-26): the output now carries the set's passport `set.json` beside
+  `smart/`, as the build and the receipt do. It laid `smart/` alone and then
+  compared it with the receipt's manifest, which lists `set.json`, so every
+  set failed with `OUTPUT_MISMATCH`. The check is unchanged and also refuses
+  anything laid beyond the product, its receipt and its archive; a package
+  without a passport lays exactly as before.
 - A set's receipt accepts a relation to a rule of a set its passport requires
   (2026-11-08, `scripts/write-package-receipt.py`). With `--registry`, the
   rules of each `requires_sets` entry are `cl-` and the element without `sf-`

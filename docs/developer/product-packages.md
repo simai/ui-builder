@@ -298,8 +298,8 @@ relations as registry ids. A missing reference is a warning
 
 `sf-build package` runs the steps below and lays the result into an output
 path of the product's choice (`--out`, or `out` in `sf-build.config.json`):
-`<out>/smart/...`, `package-receipt.json` and `package-<name>.tar`
-(`architecture-sf-build.md`). The scripts themselves:
+`<out>/smart/...`, a set's passport `<out>/set.json`, `package-receipt.json`
+and `package-<name>.tar` (`architecture-sf-build.md`). The scripts themselves:
 
 ```bash
 node <ui-builder>/scripts/verify-package-reproducibility.cjs \
