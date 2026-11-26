@@ -505,18 +505,39 @@ async function runReceipt(reportPath, ui, onProgress)
     return { receipt, receiptPath, archivePath: path.join(workspace, receipt.output.archive), warnings };
 }
 
-/** Lay <out>/smart, package-receipt.json and package-<name>.tar. */
+/**
+ * Lay <out>/smart, a set's passport <out>/set.json, package-receipt.json and
+ * package-<name>.tar.
+ */
 function layPackage(out, report, workspaceRoot, receiptFiles)
 {
     const { receipt, receiptPath, archivePath } = receiptFiles;
+    const output = path.join(workspaceRoot, report.output);
+    // The product is what the build wrote: smart/ and, for a component set,
+    // its passport set.json beside it (verify-package-reproducibility.cjs).
+    const product = report.set ? ["set.json", "smart"] : ["smart"];
+    const laidFiles = new Set(["package-receipt.json", receipt.output.archive]);
 
     layOut(out, staging => {
-        copyTree(path.join(workspaceRoot, report.output, "smart"), path.join(staging, "smart"));
+        copyTree(path.join(output, "smart"), path.join(staging, "smart"));
+
+        if (report.set)
+        {
+            fs.copyFileSync(path.join(output, "set.json"), path.join(staging, "set.json"));
+        }
+
         fs.copyFileSync(receiptPath, path.join(staging, "package-receipt.json"));
         fs.copyFileSync(archivePath, path.join(staging, receipt.output.archive));
     }, staging => {
-        // The laid smart/ hashes, from the output root, to what the receipt pinned.
-        const laid = filesUnder(staging).filter(item => item.path.startsWith("smart/"));
+        // The laid product hashes, from the output root, to what the receipt
+        // pinned; nothing but the product, its receipt and its archive is laid.
+        const all = filesUnder(staging);
+        const laid = all.filter(item => !laidFiles.has(item.path));
+
+        if (laid.some(item => !product.some(top => item.path === top || item.path.startsWith(`${top}/`))))
+        {
+            throw new SfBuildError("OUTPUT_MISMATCH", `the files laid in ${staging} hold more than ${product.join(" and ")}`);
+        }
 
         if (sha256(`${JSON.stringify(laid)}\n`) !== receipt.output.manifest_sha256
             || sha256(fs.readFileSync(path.join(staging, receipt.output.archive))) !== receipt.output.archive_sha256)
@@ -528,6 +549,7 @@ function layPackage(out, report, workspaceRoot, receiptFiles)
     return {
         archive: path.join(out, receipt.output.archive),
         receipt: path.join(out, "package-receipt.json"),
+        ...(report.set ? { passport: path.join(out, "set.json") } : {}),
         root: out,
         runtime: path.join(out, "smart"),
     };

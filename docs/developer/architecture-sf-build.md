@@ -98,7 +98,7 @@ everything it can do the API can do, with the same result object.
 | Command | What it does | Laid into `--out` |
 | --- | --- | --- |
 | `sf-build framework` | Build Core, Component, Utility and Smart from a ui-source checkout in two byte-identical waves | `<out>/{core,component,utility,smart}` and `build-report.json`: exactly the `--output` that `publish-framework-release.sh` takes |
-| `sf-build package` | Build an extension package over the Framework source its `framework.lock.json` pins, in two byte-identical waves, then write its receipt | `<out>/smart/...`, `package-receipt.json`, `package-<name>.tar` |
+| `sf-build package` | Build an extension package over the Framework source its `framework.lock.json` pins, in two byte-identical waves, then write its receipt | `<out>/smart/...`, a set's `set.json`, `package-receipt.json`, `package-<name>.tar` |
 | `sf-build verify package\|framework` | The two-wave check alone; nothing is laid | (none; `--workspace` keeps the waves) |
 | `sf-build receipt` | Write the receipt of a verified package build from its `report.json` | with `--out`, the same layout as `package` |
 
